@@ -44,6 +44,44 @@ CAT protocol: ASCII commands terminated with `;` at 38400 baud 8N1.
 
 ---
 
+## Architecture: Hexagonal (Ports & Adapters)
+
+The Rust backend uses **hexagonal architecture** to separate core domain logic from external I/O concerns. This enables:
+- Unit testing the modem/DSP without hardware
+- Easy substitution of adapters (e.g., swap `serialport` crate if needed)
+- Clear boundaries between pure logic and side effects
+
+```
+                    ┌─────────────────────────────────────┐
+                    │           DRIVING ADAPTERS          │
+                    │  (Tauri commands, UI events)        │
+                    └─────────────────┬───────────────────┘
+                                      │ calls
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                              CORE DOMAIN                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  │
+│  │    modem    │  │     dsp     │  │   domain    │  (pure logic,   │
+│  │  varicode   │  │  fft, nco   │  │   types     │   no I/O deps)  │
+│  │  enc/dec    │  │  filters    │  │             │                  │
+│  └─────────────┘  └─────────────┘  └─────────────┘                  │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                         PORTS (traits)                      │    │
+│  │  AudioInput, AudioOutput, RadioControl, SerialConnection    │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────┘
+                                      │ implemented by
+                                      ▼
+                    ┌─────────────────────────────────────┐
+                    │          DRIVEN ADAPTERS            │
+                    │  CpalAudio, SerialPortAdapter,      │
+                    │  Ft991aRadio                        │
+                    └─────────────────────────────────────┘
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -66,7 +104,7 @@ psk31_client_workspace/
 │   │   ├── event-handlers.ts         # Tauri event listeners
 │   │   └── audio-bridge.ts           # FFT channel handler
 │   ├── utils/
-│   │   ├── color-map.ts              # dB → RGB for waterfall
+│   │   ├── color-map.ts              # dB -> RGB for waterfall
 │   │   └── formatter.ts              # Frequency formatting
 │   └── types/
 │       └── index.ts                  # Shared interfaces
@@ -77,18 +115,19 @@ psk31_client_workspace/
 │   └── src/
 │       ├── main.rs
 │       ├── lib.rs                    # Tauri app builder, command registration
-│       ├── commands/                 # Tauri command handlers
+│       │
+│       ├── domain/                   # CORE: Pure domain types, no I/O
 │       │   ├── mod.rs
-│       │   ├── audio.rs              # Audio device commands
-│       │   ├── serial.rs             # Serial port commands
-│       │   ├── radio.rs              # PTT, frequency, mode
-│       │   └── modem.rs              # RX/TX control
-│       ├── audio/                    # Audio I/O via cpal
+│       │   ├── types.rs              # AudioSample, Frequency, ModemConfig, etc.
+│       │   └── error.rs              # Domain error types
+│       │
+│       ├── ports/                    # CORE: Port traits (interfaces)
 │       │   ├── mod.rs
-│       │   ├── device.rs             # Device enumeration
-│       │   ├── input_stream.rs       # Capture stream → ring buffer
-│       │   └── output_stream.rs      # Playback stream ← ring buffer
-│       ├── dsp/                      # Signal processing
+│       │   ├── audio.rs              # trait AudioInput, trait AudioOutput
+│       │   ├── serial.rs             # trait SerialConnection
+│       │   └── radio.rs              # trait RadioControl (PTT, freq, mode)
+│       │
+│       ├── dsp/                      # CORE: Signal processing (pure functions)
 │       │   ├── mod.rs
 │       │   ├── fft.rs                # 4096-point FFT for waterfall
 │       │   ├── filter.rs             # FIR bandpass/lowpass
@@ -97,20 +136,30 @@ psk31_client_workspace/
 │       │   ├── clock_recovery.rs     # Symbol timing (Mueller-Muller)
 │       │   ├── agc.rs                # Automatic gain control
 │       │   └── raised_cosine.rs      # TX pulse shaping
-│       ├── modem/                    # PSK31 protocol
+│       │
+│       ├── modem/                    # CORE: PSK31 protocol logic
 │       │   ├── mod.rs
 │       │   ├── varicode.rs           # Varicode tables + state machine
-│       │   ├── encoder.rs            # Text → bits → BPSK audio
-│       │   ├── decoder.rs            # BPSK audio → bits → text
-│       │   └── pipeline.rs           # Full RX/TX orchestration
-│       ├── cat/                      # Radio control
+│       │   ├── encoder.rs            # Text -> bits -> BPSK samples
+│       │   ├── decoder.rs            # BPSK samples -> bits -> text
+│       │   └── pipeline.rs           # RX/TX orchestration (uses port traits)
+│       │
+│       ├── adapters/                 # ADAPTERS: External I/O implementations
 │       │   ├── mod.rs
-│       │   ├── protocol.rs           # Command formatting/parsing
-│       │   ├── serial_io.rs          # Serial port read/write
-│       │   └── ft991a.rs             # FT-991A command set
-│       └── state/                    # Shared app state
+│       │   ├── cpal_audio.rs         # impl AudioInput/AudioOutput via cpal
+│       │   ├── serial_port.rs        # impl SerialConnection via serialport crate
+│       │   └── ft991a.rs             # impl RadioControl for FT-991A CAT
+│       │
+│       ├── commands/                 # DRIVING ADAPTERS: Tauri command handlers
+│       │   ├── mod.rs
+│       │   ├── audio.rs              # Audio device commands
+│       │   ├── serial.rs             # Serial port commands
+│       │   ├── radio.rs              # PTT, frequency, mode
+│       │   └── modem.rs              # RX/TX control
+│       │
+│       └── state/                    # Application state, wires adapters to core
 │           ├── mod.rs
-│           └── app_state.rs          # Arc<Mutex<>> managed state
+│           └── app_state.rs          # Arc<Mutex<dyn Port>> managed state
 ```
 
 ---
@@ -213,45 +262,46 @@ PSK-31 uses differential encoding: bit 0 = phase reversal, bit 1 = phase constan
 ### Phase 1: Project Scaffolding
 - `npm create tauri-app@latest` with vanilla-ts template
 - Add Rust dependencies to Cargo.toml
-- Create module directory structure with empty mod.rs files
+- Create hexagonal module structure: `domain/`, `ports/`, `dsp/`, `modem/`, `adapters/`, `commands/`, `state/`
+- Define port traits: `AudioInput`, `AudioOutput`, `SerialConnection`, `RadioControl`
 - Configure tauri.conf.json (1200x800 window, app ID)
 - Configure capabilities for custom commands
 - Verify `npm run tauri dev` launches empty window
 
 ### Phase 2: Serial / CAT Communication
-- `cat/serial_io.rs`: serial open/close/read/write
-- `cat/protocol.rs`: command formatting + response parsing
-- `cat/ft991a.rs`: FT-991A PTT, frequency, mode commands
-- `commands/serial.rs` + `commands/radio.rs`
+- `ports/serial.rs`: define `trait SerialConnection`
+- `ports/radio.rs`: define `trait RadioControl` (PTT, freq, mode)
+- `adapters/serial_port.rs`: impl `SerialConnection` via serialport crate
+- `adapters/ft991a.rs`: impl `RadioControl` for FT-991A CAT protocol
+- `commands/serial.rs` + `commands/radio.rs`: Tauri command handlers
 - Frontend: serial port selector, frequency display
 - **Deliverable**: Connect to FT-991A, read/set freq, toggle PTT
 
 ### Phase 3: Audio Subsystem + Waterfall
-- `audio/device.rs`: enumerate devices via cpal
-- `audio/input_stream.rs`: capture stream -> ring buffer
-- `dsp/fft.rs`: 4096-point FFT, Hanning window, dB output
-- `commands/audio.rs`: device listing + stream control commands
+- `ports/audio.rs`: define `trait AudioInput`, `trait AudioOutput`
+- `adapters/cpal_audio.rs`: impl audio traits via cpal
+- `dsp/fft.rs`: 4096-point FFT, Hanning window, dB output (pure function)
+- `commands/audio.rs`: Tauri command handlers
 - `waterfall.ts`: Canvas-based scrolling spectrogram
 - `control-panel.ts` (partial): audio device selectors
 - **Deliverable**: Live waterfall from selected audio input
 
 ### Phase 4: PSK-31 TX Path
-- `modem/varicode.rs`: complete encode/decode tables
-- `dsp/nco.rs`: numerically controlled oscillator
-- `dsp/raised_cosine.rs`: TX pulse shaping
-- `modem/encoder.rs`: text -> Varicode -> BPSK audio
-- `audio/output_stream.rs`: playback from ring buffer
-- `modem/pipeline.rs` (TX portion): full TX chain with PTT sequencing
+- `modem/varicode.rs`: complete encode/decode tables (pure, no I/O)
+- `dsp/nco.rs`: numerically controlled oscillator (pure)
+- `dsp/raised_cosine.rs`: TX pulse shaping (pure)
+- `modem/encoder.rs`: text -> Varicode -> BPSK samples (pure)
+- `modem/pipeline.rs` (TX): orchestrates encoder + audio output port + radio control port
 - `tx-input.ts`: text area with TX/abort buttons
 - **Deliverable**: Type text, transmit BPSK-31 via FT-991A
 
 ### Phase 5: PSK-31 RX Path (most complex)
-- `dsp/filter.rs`: FIR bandpass + lowpass
-- `dsp/agc.rs`: automatic gain control
-- `dsp/costas_loop.rs`: BPSK carrier tracking
-- `dsp/clock_recovery.rs`: Mueller-Muller symbol timing
-- `modem/decoder.rs`: full decode chain
-- `modem/pipeline.rs` (RX portion): threaded RX pipeline
+- `dsp/filter.rs`: FIR bandpass + lowpass (pure)
+- `dsp/agc.rs`: automatic gain control (pure)
+- `dsp/costas_loop.rs`: BPSK carrier tracking (pure)
+- `dsp/clock_recovery.rs`: Mueller-Muller symbol timing (pure)
+- `modem/decoder.rs`: full decode chain (pure)
+- `modem/pipeline.rs` (RX): orchestrates audio input port -> DSP -> decoder
 - `rx-display.ts`: scrolling decoded text
 - Waterfall click-to-tune integration
 - **Deliverable**: Decode live PSK-31 signals with click-to-tune
@@ -267,20 +317,27 @@ PSK-31 uses differential encoding: bit 0 = phase reversal, bit 1 = phase constan
 
 ## Testing Strategy
 
-### Unit Tests (Rust `#[cfg(test)]`)
+Hexagonal architecture enables thorough testing of the **core domain** (dsp/, modem/) without any hardware or I/O dependencies. Adapters are tested separately.
+
+### Unit Tests — Core Domain (Rust `#[cfg(test)]`)
+All core modules are pure and testable in isolation:
 - **Varicode**: Round-trip every character, decoder state machine edge cases
 - **NCO**: Frequency accuracy, phase continuity across frequency changes
 - **FIR Filters**: Impulse response, frequency response at passband/stopband
 - **FFT**: Known sine wave -> correct bin peak
 - **Costas Loop**: Lock acquisition with synthetic BPSK at various SNR/offsets
 - **Clock Recovery**: Symbol decisions with timing offsets
-- **CAT Protocol**: Command formatting + response parsing (no hardware)
+- **Encoder/Decoder**: Text -> samples -> text round-trip (no I/O, just function calls)
+
+### Unit Tests — Adapters
+- **FT-991A CAT**: Command formatting + response parsing (mock serial bytes)
+- **Mock adapters**: Create `MockAudioInput`, `MockRadioControl` for pipeline tests
 
 ### Integration Tests (`src-tauri/tests/`)
-- **TX->RX loopback**: Encode string -> feed audio through RX pipeline -> verify decoded output matches. This is the critical end-to-end validation.
-- **CAT protocol parsing**: Full command/response sequences
+- **TX->RX loopback**: Use mock audio ports; encoder output feeds directly into decoder. Verify text round-trips correctly. No hardware needed.
+- **CAT protocol parsing**: Full command/response sequences with mock serial
 
-### Hardware-in-the-Loop
+### Hardware-in-the-Loop (manual verification)
 - CAT control with FT-991A (PTT, freq, mode)
 - TX: transmit known text, decode on second receiver/fldigi
 - RX: decode live PSK-31 signals (on-air or from fldigi)

@@ -1,0 +1,45 @@
+//! PSK-31 Desktop Client
+//!
+//! A cross-platform application for sending and receiving PSK-31 ham radio messages.
+//!
+//! ## Architecture (Hexagonal / Ports & Adapters)
+//!
+//! - `domain/` - Pure domain types, no I/O dependencies
+//! - `ports/` - Trait definitions (interfaces) for external dependencies
+//! - `dsp/` - Signal processing (pure functions, no I/O)
+//! - `modem/` - PSK-31 protocol logic (varicode, encoder, decoder)
+//! - `adapters/` - Implementations of ports (cpal audio, serialport, FT-991A)
+//! - `commands/` - Tauri command handlers (driving adapters)
+//! - `state/` - Application state management
+
+// Core domain (pure, no I/O)
+pub mod domain;
+pub mod ports;
+pub mod dsp;
+pub mod modem;
+
+// Adapters (external I/O)
+pub mod adapters;
+
+// Tauri integration
+pub mod commands;
+pub mod state;
+
+use state::AppState;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .manage(AppState::new())
+        .invoke_handler(tauri::generate_handler![
+            // Audio commands
+            commands::audio::list_audio_devices,
+            // Serial commands
+            commands::serial::list_serial_ports,
+            // Radio commands (stubbed for now)
+            // Modem commands (stubbed for now)
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

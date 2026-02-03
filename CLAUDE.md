@@ -54,8 +54,18 @@ cargo test             # Run Rust unit tests (in src-tauri/)
 
 ## Current Status
 
-- Phase 1 complete: Project scaffolding, hexagonal module structure
-- Next: Phase 1.5 (Frontend layout & visual tests)
+- [x] Phase 1: Project scaffolding, hexagonal module structure
+- [ ] Phase 1.5: Frontend layout & visual tests
+- [ ] Phase 2: Serial / CAT communication with FT-991A
+- [ ] Phase 3: Audio subsystem + waterfall display
+- [ ] Phase 4: PSK-31 TX path
+- [ ] Phase 5: PSK-31 RX path
+- [ ] Phase 6: Integration + polish
+
+## Instructions for Claude
+
+- **When completing a phase**: Update the Current Status checklist above and commit the change
+- **When starting a phase**: Mark the task in_progress using TaskUpdate
 
 ## License Consideration
 

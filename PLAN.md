@@ -257,9 +257,27 @@ PSK-31 uses differential encoding: bit 0 = phase reversal, bit 1 = phase constan
 
 ---
 
+## Design Philosophy
+
+**Inspiration**: JS8Call, WSJT-X — clean, functional, no clutter.
+
+**Anti-inspiration**: fldigi — too many modes, too much configuration, overwhelming for newcomers.
+
+**Goal**: A streamlined, single-purpose app for PSK-31 keyboard-to-keyboard communication. Do one thing well.
+
+**Visual principles**:
+- Dark theme (easy on eyes during night operating)
+- Waterfall display prominent at top
+- Clear visual separation: RX text (top), TX text (bottom), controls (sidebar or bottom bar)
+- Minimal chrome — no unnecessary borders, shadows, or decorations
+- Monospace fonts for RX/TX text (readability of callsigns, signal reports)
+- High contrast for important state indicators (TX/RX, PTT, connection status)
+
+---
+
 ## Implementation Phases
 
-### Phase 1: Project Scaffolding
+### Phase 1: Project Scaffolding ✓
 - `npm create tauri-app@latest` with vanilla-ts template
 - Add Rust dependencies to Cargo.toml
 - Create hexagonal module structure: `domain/`, `ports/`, `dsp/`, `modem/`, `adapters/`, `commands/`, `state/`
@@ -267,6 +285,21 @@ PSK-31 uses differential encoding: bit 0 = phase reversal, bit 1 = phase constan
 - Configure tauri.conf.json (1200x800 window, app ID)
 - Configure capabilities for custom commands
 - Verify `npm run tauri dev` launches empty window
+
+### Phase 1.5: Frontend Layout & Visual Tests
+- Design and implement the complete UI shell (non-functional, mocked data)
+- **Layout**:
+  - Top: Waterfall canvas (click-to-tune target area)
+  - Middle: RX text display (scrolling, monospace)
+  - Bottom: TX text input (with character counter, TX/Abort buttons)
+  - Sidebar or bottom bar: Controls (serial port, audio devices, frequency, PTT indicator)
+  - Status bar: Connection state, signal level, mode indicator
+- **Styling**: Dark theme CSS, JS8Call/WSJT-X aesthetic
+- **Playwright visual tests**: Snapshot tests to lock in the design
+  - Test with mocked IPC (`@tauri-apps/api/mocks`)
+  - Capture baseline screenshots for each major UI state
+  - Run in CI to catch visual regressions
+- **Deliverable**: Complete UI mockup with Playwright visual test suite
 
 ### Phase 2: Serial / CAT Communication
 - `ports/serial.rs`: define `trait SerialConnection`
@@ -317,7 +350,29 @@ PSK-31 uses differential encoding: bit 0 = phase reversal, bit 1 = phase constan
 
 ## Testing Strategy
 
-Hexagonal architecture enables thorough testing of the **core domain** (dsp/, modem/) without any hardware or I/O dependencies. Adapters are tested separately.
+Hexagonal architecture enables thorough testing of the **core domain** (dsp/, modem/) without any hardware or I/O dependencies. Adapters are tested separately. Frontend is tested with Playwright visual regression tests.
+
+### Frontend Tests — Playwright
+- **Visual regression tests**: Snapshot comparisons to catch unintended UI changes
+- **Mock Tauri IPC**: Use `@tauri-apps/api/mocks` to simulate backend responses
+- **Test states**: Default view, TX active, RX with decoded text, error states, connection states
+- **Run in CI**: Fail build if visual snapshots don't match baseline
+
+```typescript
+// Example Playwright test structure
+import { mockIPC } from '@tauri-apps/api/mocks';
+
+test('main UI renders correctly', async ({ page }) => {
+  await page.goto('http://localhost:1420');
+  await expect(page).toHaveScreenshot('main-ui.png');
+});
+
+test('TX mode shows correct indicators', async ({ page }) => {
+  mockIPC((cmd) => { /* mock responses */ });
+  // trigger TX state
+  await expect(page).toHaveScreenshot('tx-active.png');
+});
+```
 
 ### Unit Tests — Core Domain (Rust `#[cfg(test)]`)
 All core modules are pure and testable in isolation:

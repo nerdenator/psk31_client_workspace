@@ -1,43 +1,202 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
+    <title>PSK-31</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
 
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+    <div class="app-container">
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <!-- Waterfall Display -->
+        <section class="waterfall-section">
+          <div class="waterfall-header">
+            <span class="waterfall-label">Waterfall</span>
+            <span class="waterfall-freq">1500 Hz</span>
+          </div>
+          <div class="waterfall-canvas-container">
+            <canvas id="waterfall-canvas"></canvas>
+            <div class="carrier-marker"></div>
+          </div>
+          <div class="waterfall-scale">
+            <span>500</span>
+            <span>1000</span>
+            <span>1500</span>
+            <span>2000</span>
+            <span>2500 Hz</span>
+          </div>
+        </section>
 
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+        <!-- RX Display -->
+        <section class="rx-section">
+          <div class="rx-header">
+            <div class="rx-label">
+              <span class="rx-indicator"></span>
+              <span>RX</span>
+            </div>
+            <div class="rx-controls">
+              <button class="rx-btn">Clear</button>
+            </div>
+          </div>
+          <div class="rx-content" id="rx-content">CQ CQ CQ DE W1ABC W1ABC W1ABC PSE K
+W1ABC DE K2XYZ K2XYZ GM UR RST 599 599 NAME IS JOHN JOHN QTH IS NEW YORK NY NY HW CPY? W1ABC DE K2XYZ K
+K2XYZ DE W1ABC R R GM JOHN TNX FER CALL UR RST 579 579 NAME HR IS BOB BOB QTH BOSTON MA MA SO HW? K2XYZ DE W1ABC K
+W1ABC DE K2XYZ R R BOB TNX FB QSO CUAGN 73 73 SK W1ABC DE K2XYZ</div>
+        </section>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
-    </main>
+        <!-- TX Input -->
+        <section class="tx-section">
+          <div class="tx-header">
+            <div class="tx-label">
+              <span class="tx-indicator"></span>
+              <span>TX</span>
+            </div>
+            <div class="tx-char-count">
+              <span class="current">0</span> / 256
+            </div>
+          </div>
+          <div class="tx-input-container">
+            <textarea
+              id="tx-input"
+              placeholder="Type message to transmit..."
+              maxlength="256"
+            ></textarea>
+          </div>
+          <div class="tx-buttons">
+            <button class="tx-btn tx-btn-send">TX</button>
+            <button class="tx-btn tx-btn-abort" disabled>Abort</button>
+          </div>
+        </section>
+      </main>
+
+      <!-- Sidebar Controls -->
+      <aside class="sidebar">
+        <!-- Frequency -->
+        <div class="sidebar-section">
+          <div class="section-label">Frequency</div>
+          <div class="frequency-display">
+            <div class="frequency-value">14.070.000</div>
+            <div class="frequency-unit">MHz</div>
+            <span class="frequency-mode">DATA-USB</span>
+          </div>
+        </div>
+
+        <!-- PTT Status -->
+        <div class="sidebar-section">
+          <div class="section-label">PTT</div>
+          <div class="ptt-container">
+            <div class="ptt-indicator rx">RX</div>
+            <div class="ptt-status">Receiving</div>
+          </div>
+        </div>
+
+        <!-- Audio Carrier -->
+        <div class="sidebar-section">
+          <div class="section-label">Audio Carrier</div>
+          <div class="frequency-display" style="padding: 8px 0;">
+            <div class="frequency-value" style="font-size: 16px;">1500</div>
+            <div class="frequency-unit">Hz</div>
+          </div>
+        </div>
+
+        <!-- Serial Port -->
+        <div class="sidebar-section">
+          <div class="section-label">Radio Control</div>
+          <div class="device-group">
+            <div class="device-label">Serial Port</div>
+            <select class="device-select" id="serial-port">
+              <option value="">Select port...</option>
+              <option value="cu.usbserial-14220" selected>/dev/cu.usbserial-14220</option>
+              <option value="cu.usbserial-14230">/dev/cu.usbserial-14230</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Audio Devices -->
+        <div class="sidebar-section">
+          <div class="section-label">Audio</div>
+          <div class="device-group">
+            <div class="device-label">Input</div>
+            <select class="device-select" id="audio-input">
+              <option value="">Select device...</option>
+              <option value="ft991a" selected>FT-991A USB Audio</option>
+              <option value="builtin">Built-in Microphone</option>
+            </select>
+          </div>
+          <div class="device-group">
+            <div class="device-label">Output</div>
+            <select class="device-select" id="audio-output">
+              <option value="">Select device...</option>
+              <option value="ft991a" selected>FT-991A USB Audio</option>
+              <option value="builtin">Built-in Speakers</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="sidebar-section">
+          <div class="section-label">Connections</div>
+          <div class="connection-item">
+            <span class="connection-name">CAT</span>
+            <div class="connection-status">
+              <span class="status-dot connected"></span>
+              <span class="status-text connected">OK</span>
+            </div>
+          </div>
+          <div class="connection-item">
+            <span class="connection-name">Audio In</span>
+            <div class="connection-status">
+              <span class="status-dot connected"></span>
+              <span class="status-text connected">OK</span>
+            </div>
+          </div>
+          <div class="connection-item">
+            <span class="connection-name">Audio Out</span>
+            <div class="connection-status">
+              <span class="status-dot connected"></span>
+              <span class="status-text connected">OK</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Status Bar -->
+      <footer class="status-bar">
+        <div class="status-left">
+          <div class="status-item">
+            <span class="label">Mode:</span>
+            <span class="value">PSK-31</span>
+          </div>
+          <div class="status-item">
+            <span class="label">Rate:</span>
+            <span class="value">31.25 Bd</span>
+          </div>
+          <div class="status-item signal-meter">
+            <span class="label">Sig:</span>
+            <div class="signal-bars">
+              <span class="signal-bar active"></span>
+              <span class="signal-bar active"></span>
+              <span class="signal-bar active"></span>
+              <span class="signal-bar"></span>
+              <span class="signal-bar"></span>
+            </div>
+          </div>
+        </div>
+        <div class="status-right">
+          <div class="status-item">
+            <span class="label">Carrier:</span>
+            <span class="value highlight">1500 Hz</span>
+          </div>
+          <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+            <span class="theme-toggle-icon">◐</span>
+          </button>
+          <span class="version-info">PSK-31 v0.1.0</span>
+        </div>
+      </footer>
+    </div>
   </body>
 </html>

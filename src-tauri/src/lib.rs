@@ -42,8 +42,11 @@ pub fn run() {
             commands::audio::list_audio_devices,
             // Serial commands
             commands::serial::list_serial_ports,
-            // Radio commands (stubbed for now)
-            // Modem commands (stubbed for now)
+            // Configuration commands
+            commands::config::save_configuration,
+            commands::config::load_configuration,
+            commands::config::list_configurations,
+            commands::config::delete_configuration,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

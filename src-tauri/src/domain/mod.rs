@@ -3,8 +3,10 @@
 //! Pure types with no I/O dependencies. These represent the core concepts
 //! of the PSK-31 application.
 
-pub mod types;
+pub mod config;
 pub mod error;
+pub mod types;
 
-pub use types::*;
+pub use config::*;
 pub use error::*;
+pub use types::*;

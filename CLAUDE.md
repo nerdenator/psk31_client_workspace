@@ -27,7 +27,10 @@ src-tauri/src/
 ## Key Files
 
 - `PLAN.md` — Full implementation plan with 6 phases
+- `PLAN_MENU.md` — Native menu bar implementation plan
 - `src-tauri/src/lib.rs` — Tauri app builder, command registration
+- `src-tauri/src/menu.rs` — Native menu bar setup and event handling
+- `src-tauri/src/domain/config.rs` — Configuration profile types
 - `src-tauri/src/modem/varicode.rs` — PSK-31 Varicode tables (complete)
 - `src-tauri/src/dsp/fft.rs` — FFT processor with tests
 - `src-tauri/src/dsp/nco.rs` — Numerically controlled oscillator with tests

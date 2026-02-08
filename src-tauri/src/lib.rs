@@ -14,15 +14,16 @@
 
 // Core domain (pure, no I/O)
 pub mod domain;
-pub mod ports;
 pub mod dsp;
 pub mod modem;
+pub mod ports;
 
 // Adapters (external I/O)
 pub mod adapters;
 
 // Tauri integration
 pub mod commands;
+pub mod menu;
 pub mod state;
 
 use state::AppState;
@@ -32,6 +33,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::new())
+        .setup(|app| {
+            menu::setup_menu(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // Audio commands
             commands::audio::list_audio_devices,

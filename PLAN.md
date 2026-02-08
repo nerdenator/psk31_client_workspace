@@ -277,122 +277,221 @@ PSK-31 uses differential encoding: bit 0 = phase reversal, bit 1 = phase constan
 
 ## Implementation Phases
 
+Each phase includes implementation, unit tests, and E2E tests. Tests are written alongside code, not as an afterthought.
+
 ### Phase 1: Project Scaffolding ✓
+**Implementation:**
 - `npm create tauri-app@latest` with vanilla-ts template
 - Add Rust dependencies to Cargo.toml
 - Create hexagonal module structure: `domain/`, `ports/`, `dsp/`, `modem/`, `adapters/`, `commands/`, `state/`
 - Define port traits: `AudioInput`, `AudioOutput`, `SerialConnection`, `RadioControl`
 - Configure tauri.conf.json (1200x800 window, app ID)
 - Configure capabilities for custom commands
-- Verify `npm run tauri dev` launches empty window
 
-### Phase 1.5: Frontend Layout & Visual Tests
-- Design and implement the complete UI shell (non-functional, mocked data)
-- **Layout**:
-  - Top: Waterfall canvas (click-to-tune target area)
-  - Middle: RX text display (scrolling, monospace)
-  - Bottom: TX text input (with character counter, TX/Abort buttons)
-  - Sidebar or bottom bar: Controls (serial port, audio devices, frequency, PTT indicator)
-  - Status bar: Connection state, signal level, mode indicator
-- **Styling**: Dark theme CSS, JS8Call/WSJT-X aesthetic
-- **Playwright visual tests**: Snapshot tests to lock in the design
-  - Test with mocked IPC (`@tauri-apps/api/mocks`)
-  - Capture baseline screenshots for each major UI state
-  - Run in CI to catch visual regressions
-- **Deliverable**: Complete UI mockup with Playwright visual test suite
+**Verification:**
+- `npm run tauri dev` launches empty window
+- `cargo check` passes
+
+### Phase 1.5: Frontend Layout & Visual Tests ✓
+**Implementation:**
+- Complete UI shell with mocked data (waterfall, RX/TX panels, sidebar, status bar)
+- Dark/light theme CSS with JS8Call/WSJT-X aesthetic
+- Native menu bar (File, Configurations, View, Help)
+- Configuration domain type for saved profiles
+
+**Unit Tests (Rust):**
+- `domain/config.rs`: Configuration serialization, default values
+
+**E2E Tests (Playwright):**
+- Main layout structure (7 tests)
+- Theme toggle functionality (3 tests)
+- TX/RX panel interactions (4 tests)
+- Waterfall click-to-tune (1 test)
+- Menu event handling (2 tests)
+- Visual regression - light/dark themes (2 tests)
+
+**Commands:** `npm test`, `cargo test`
 
 ### Phase 2: Serial / CAT Communication
+**Implementation:**
 - `ports/serial.rs`: define `trait SerialConnection`
 - `ports/radio.rs`: define `trait RadioControl` (PTT, freq, mode)
 - `adapters/serial_port.rs`: impl `SerialConnection` via serialport crate
 - `adapters/ft991a.rs`: impl `RadioControl` for FT-991A CAT protocol
 - `commands/serial.rs` + `commands/radio.rs`: Tauri command handlers
-- Frontend: serial port selector, frequency display
-- **Deliverable**: Connect to FT-991A, read/set freq, toggle PTT
+- Frontend: serial port selector, frequency display, connect/disconnect
+
+**Unit Tests (Rust):**
+- `ft991a.rs`: CAT command formatting (`TX1;`, `FA00014070000;`)
+- `ft991a.rs`: Response parsing (`FA00014070000;` → 14.070 MHz)
+- `ft991a.rs`: Mode parsing (`MD0C;` → DATA-USB)
+- `serial_port.rs`: Mock serial read/write with fake bytes
+
+**E2E Tests (Playwright):**
+- Serial port dropdown populates (mocked device list)
+- Connect button state changes on click
+- Frequency display updates from mocked backend
+- PTT indicator shows TX/RX state
+- Error state when connection fails
+
+**Deliverable:** Connect to FT-991A, read/set freq, toggle PTT
 
 ### Phase 3: Audio Subsystem + Waterfall
+**Implementation:**
 - `ports/audio.rs`: define `trait AudioInput`, `trait AudioOutput`
 - `adapters/cpal_audio.rs`: impl audio traits via cpal
-- `dsp/fft.rs`: 4096-point FFT, Hanning window, dB output (pure function)
+- `dsp/fft.rs`: 4096-point FFT, Hanning window, dB output
 - `commands/audio.rs`: Tauri command handlers
-- `waterfall.ts`: Canvas-based scrolling spectrogram
-- `control-panel.ts` (partial): audio device selectors
-- **Deliverable**: Live waterfall from selected audio input
+- Wire live FFT data to waterfall canvas
+- Audio device selectors in sidebar
+
+**Unit Tests (Rust):**
+- `fft.rs`: Known sine wave → correct bin peak
+- `fft.rs`: Windowing function correctness
+- `fft.rs`: dB conversion accuracy
+- `cpal_audio.rs`: Device enumeration (mock cpal host)
+
+**E2E Tests (Playwright):**
+- Audio input/output dropdowns populate
+- Waterfall canvas receives and renders data (mocked FFT stream)
+- Click-to-tune updates carrier frequency display
+- Audio device selection persists
+
+**Deliverable:** Live waterfall from selected audio input
 
 ### Phase 4: PSK-31 TX Path
-- `modem/varicode.rs`: complete encode/decode tables (pure, no I/O)
-- `dsp/nco.rs`: numerically controlled oscillator (pure)
-- `dsp/raised_cosine.rs`: TX pulse shaping (pure)
-- `modem/encoder.rs`: text -> Varicode -> BPSK samples (pure)
-- `modem/pipeline.rs` (TX): orchestrates encoder + audio output port + radio control port
-- `tx-input.ts`: text area with TX/abort buttons
-- **Deliverable**: Type text, transmit BPSK-31 via FT-991A
+**Implementation:**
+- `modem/varicode.rs`: complete encode/decode tables
+- `dsp/nco.rs`: numerically controlled oscillator
+- `dsp/raised_cosine.rs`: TX pulse shaping
+- `modem/encoder.rs`: text → Varicode → BPSK samples
+- `modem/pipeline.rs` (TX): orchestrates encoder + audio output + radio control
+- TX input with character counter, TX/Abort buttons
 
-### Phase 5: PSK-31 RX Path (most complex)
-- `dsp/filter.rs`: FIR bandpass + lowpass (pure)
-- `dsp/agc.rs`: automatic gain control (pure)
-- `dsp/costas_loop.rs`: BPSK carrier tracking (pure)
-- `dsp/clock_recovery.rs`: Mueller-Muller symbol timing (pure)
-- `modem/decoder.rs`: full decode chain (pure)
-- `modem/pipeline.rs` (RX): orchestrates audio input port -> DSP -> decoder
-- `rx-display.ts`: scrolling decoded text
+**Unit Tests (Rust):**
+- `varicode.rs`: Encode every printable ASCII character
+- `varicode.rs`: Round-trip encode→decode
+- `nco.rs`: Frequency accuracy over time
+- `nco.rs`: Phase continuity across frequency changes
+- `raised_cosine.rs`: Pulse shape symmetry
+- `encoder.rs`: Known text → expected bit sequence
+- `encoder.rs`: Preamble/postamble generation
+
+**E2E Tests (Playwright):**
+- TX button disabled when input empty
+- Character counter updates on typing
+- TX button triggers transmit state (mocked)
+- Abort button cancels transmission
+- PTT indicator shows TX during transmission
+- TX input disabled during transmission
+
+**Integration Test (Rust):**
+- Encoder output → loopback → decoder input → original text
+
+**Deliverable:** Type text, transmit BPSK-31 via FT-991A
+
+### Phase 5: PSK-31 RX Path
+**Implementation:**
+- `dsp/filter.rs`: FIR bandpass + lowpass
+- `dsp/agc.rs`: automatic gain control
+- `dsp/costas_loop.rs`: BPSK carrier tracking
+- `dsp/clock_recovery.rs`: Mueller-Muller symbol timing
+- `modem/decoder.rs`: full decode chain
+- `modem/pipeline.rs` (RX): audio input → DSP → decoder
+- RX display with scrolling decoded text
 - Waterfall click-to-tune integration
-- **Deliverable**: Decode live PSK-31 signals with click-to-tune
+
+**Unit Tests (Rust):**
+- `filter.rs`: Impulse response matches design
+- `filter.rs`: Frequency response at passband/stopband edges
+- `agc.rs`: Gain adjustment for varying input levels
+- `costas_loop.rs`: Lock acquisition with clean BPSK
+- `costas_loop.rs`: Lock acquisition with frequency offset
+- `costas_loop.rs`: Phase tracking accuracy
+- `clock_recovery.rs`: Symbol timing with various offsets
+- `decoder.rs`: Synthetic BPSK → correct text
+- `decoder.rs`: Handle phase ambiguity (180° flip)
+
+**E2E Tests (Playwright):**
+- RX display shows decoded text (mocked decoder stream)
+- RX display scrolls with new text
+- Clear button empties RX display
+- Click waterfall updates carrier frequency
+- Signal level indicator responds to input level
+
+**Integration Test (Rust):**
+- Full TX→RX loopback: text → encoder → decoder → text
+- Loopback with simulated noise
+- Loopback with frequency offset
+
+**Deliverable:** Decode live PSK-31 signals with click-to-tune
 
 ### Phase 6: Integration + Polish
-- `status-bar.ts`: connection indicators, signal level
+**Implementation:**
+- Status bar: connection indicators, signal level meter
 - Error handling: serial disconnect recovery, audio hot-plug
-- Waterfall controls (color palette, zoom, noise floor)
-- Cross-platform testing
+- Waterfall controls (color palette selector, zoom, noise floor adjustment)
+- Configuration save/load (persist to app data directory)
+- Cross-platform testing (macOS, Windows, Linux)
 - Tauri bundler packaging per platform
+
+**Unit Tests (Rust):**
+- Configuration file read/write
+- Error recovery state machine
+
+**E2E Tests (Playwright):**
+- Full application flow: connect → receive → transmit → disconnect
+- Settings dialog opens and saves preferences
+- Configuration switching works
+- Theme persists across restart
+- Error messages display correctly
+- Visual regression for all UI states
+
+**Deliverable:** Production-ready application with installers
 
 ---
 
 ## Testing Strategy
 
-Hexagonal architecture enables thorough testing of the **core domain** (dsp/, modem/) without any hardware or I/O dependencies. Adapters are tested separately. Frontend is tested with Playwright visual regression tests.
+Tests are written alongside code in each phase, not as an afterthought. Hexagonal architecture enables thorough testing of the **core domain** (dsp/, modem/) without any hardware or I/O dependencies.
 
-### Frontend Tests — Playwright
-- **Visual regression tests**: Snapshot comparisons to catch unintended UI changes
-- **Mock Tauri IPC**: Use `@tauri-apps/api/mocks` to simulate backend responses
-- **Test states**: Default view, TX active, RX with decoded text, error states, connection states
-- **Run in CI**: Fail build if visual snapshots don't match baseline
+### Test Commands
 
-```typescript
-// Example Playwright test structure
-import { mockIPC } from '@tauri-apps/api/mocks';
+```bash
+# Run all Playwright E2E tests
+npm test
 
-test('main UI renders correctly', async ({ page }) => {
-  await page.goto('http://localhost:1420');
-  await expect(page).toHaveScreenshot('main-ui.png');
-});
+# Run Playwright with interactive UI
+npm run test:ui
 
-test('TX mode shows correct indicators', async ({ page }) => {
-  mockIPC((cmd) => { /* mock responses */ });
-  // trigger TX state
-  await expect(page).toHaveScreenshot('tx-active.png');
-});
+# Update visual regression snapshots
+npm run test:update-snapshots
+
+# Run Rust unit tests
+cargo test
+
+# Run specific Rust test
+cargo test test_name
 ```
 
-### Unit Tests — Core Domain (Rust `#[cfg(test)]`)
-All core modules are pure and testable in isolation:
-- **Varicode**: Round-trip every character, decoder state machine edge cases
-- **NCO**: Frequency accuracy, phase continuity across frequency changes
-- **FIR Filters**: Impulse response, frequency response at passband/stopband
-- **FFT**: Known sine wave -> correct bin peak
-- **Costas Loop**: Lock acquisition with synthetic BPSK at various SNR/offsets
-- **Clock Recovery**: Symbol decisions with timing offsets
-- **Encoder/Decoder**: Text -> samples -> text round-trip (no I/O, just function calls)
+### Test Types
 
-### Unit Tests — Adapters
-- **FT-991A CAT**: Command formatting + response parsing (mock serial bytes)
-- **Mock adapters**: Create `MockAudioInput`, `MockRadioControl` for pipeline tests
+| Type | Location | Purpose |
+|------|----------|---------|
+| **Rust Unit** | `src-tauri/src/**/mod.rs` | Pure function correctness (DSP, modem, domain) |
+| **Rust Integration** | `src-tauri/tests/` | Cross-module tests (TX→RX loopback) |
+| **Playwright E2E** | `tests/e2e/` | UI behavior, visual regression |
 
-### Integration Tests (`src-tauri/tests/`)
-- **TX->RX loopback**: Use mock audio ports; encoder output feeds directly into decoder. Verify text round-trips correctly. No hardware needed.
-- **CAT protocol parsing**: Full command/response sequences with mock serial
+### Playwright Configuration
 
-### Hardware-in-the-Loop (manual verification)
+- **Browser**: WebKit (Safari engine)
+- **Base URL**: `http://localhost:1420` (Vite dev server)
+- **Visual regression**: Snapshots in `tests/e2e/*.spec.ts-snapshots/`
+- **Animated elements**: Masked to prevent flaky comparisons
+
+### Hardware-in-the-Loop (Manual)
+
+After all automated tests pass, verify with real hardware:
 - CAT control with FT-991A (PTT, freq, mode)
 - TX: transmit known text, decode on second receiver/fldigi
 - RX: decode live PSK-31 signals (on-air or from fldigi)

@@ -4,3 +4,4 @@ pub mod audio;
 pub mod config;
 pub mod radio;
 pub mod serial;
+pub mod tx;

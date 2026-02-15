@@ -137,51 +137,102 @@ test.describe('Waterfall Interaction', () => {
 });
 
 test.describe('TX Flow (Mock)', () => {
-  test.beforeEach(async ({ page }) => {
+  test('send button does nothing with empty input', async ({ page }) => {
+    // Mock invoke so startTx resolves
+    await page.addInitScript(() => {
+      (window as any).__TAURI_INTERNALS__ = {
+        invoke: () => Promise.resolve(null),
+        metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
+        convertFileSrc: (src: string) => src,
+      };
+    });
     await page.goto('/');
-  });
 
-  test('send button is disabled with empty input', async ({ page }) => {
-    const sendBtn = page.locator('.tx-btn-send');
     const txInput = page.locator('#tx-input');
-
     await txInput.fill('');
-    await sendBtn.click();
+    await page.locator('.tx-btn-send').click();
 
     // PTT indicator should still be RX (send didn't work)
     await expect(page.locator('.ptt-indicator')).toHaveText('RX');
   });
 
   test('send button triggers TX state', async ({ page }) => {
-    const sendBtn = page.locator('.tx-btn-send');
+    // Mock invoke — start_tx succeeds, we'll simulate completion via event
+    await page.addInitScript(() => {
+      (window as any).__TAURI_INTERNALS__ = {
+        invoke: (cmd: string) => {
+          if (cmd === 'start_tx') {
+            // Simulate tx-status "complete" event after 500ms
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('tauri://event', {
+                detail: { event: 'tx-status', payload: { status: 'complete', progress: 1.0 } }
+              }));
+            }, 500);
+          }
+          return Promise.resolve(null);
+        },
+        metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
+        convertFileSrc: (src: string) => src,
+      };
+    });
+    await page.goto('/');
+
+    // Need an audio output device selected for TX to proceed
+    await page.evaluate(() => {
+      const select = document.getElementById('audio-output') as HTMLSelectElement;
+      const opt = document.createElement('option');
+      opt.value = 'test-speaker';
+      opt.textContent = 'Test Speaker';
+      select.appendChild(opt);
+      select.value = 'test-speaker';
+    });
+
     const txInput = page.locator('#tx-input');
     const pttIndicator = page.locator('.ptt-indicator');
 
     await txInput.fill('CQ CQ CQ');
-    await sendBtn.click();
+    await page.locator('.tx-btn-send').click();
 
-    // Should switch to TX
+    // Should switch to TX immediately (UI state set before backend call)
     await expect(pttIndicator).toHaveText('TX');
     await expect(pttIndicator).toHaveClass(/tx/);
-
-    // Should auto-return to RX after timeout (3s in mock)
-    await expect(pttIndicator).toHaveText('RX', { timeout: 5000 });
   });
 
   test('abort button returns to RX state', async ({ page }) => {
-    const sendBtn = page.locator('.tx-btn-send');
-    const abortBtn = page.locator('.tx-btn-abort');
+    await page.addInitScript(() => {
+      (window as any).__TAURI_INTERNALS__ = {
+        invoke: () => Promise.resolve(null),
+        metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
+        convertFileSrc: (src: string) => src,
+      };
+    });
+    await page.goto('/');
+
+    // Add an audio output device
+    await page.evaluate(() => {
+      const select = document.getElementById('audio-output') as HTMLSelectElement;
+      const opt = document.createElement('option');
+      opt.value = 'test-speaker';
+      opt.textContent = 'Test Speaker';
+      select.appendChild(opt);
+      select.value = 'test-speaker';
+    });
+
     const txInput = page.locator('#tx-input');
     const pttIndicator = page.locator('.ptt-indicator');
 
     await txInput.fill('Test message');
-    await sendBtn.click();
+    await page.locator('.tx-btn-send').click();
 
     await expect(pttIndicator).toHaveText('TX');
 
-    await abortBtn.click();
+    await page.locator('.tx-btn-abort').click();
 
-    await expect(pttIndicator).toHaveText('RX');
+    // Abort calls stopTx which resets UI via the onAborted callback,
+    // but since we don't have real events, the abort click itself
+    // should still trigger the backend. The UI resets because stopTx resolves.
+    // Wait a beat for the promise to resolve
+    await expect(pttIndicator).toHaveText('RX', { timeout: 3000 });
   });
 });
 

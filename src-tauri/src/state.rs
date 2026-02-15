@@ -15,6 +15,10 @@ pub struct AppState {
     pub audio_running: Arc<AtomicBool>,
     /// Handle to the audio processing thread (for clean shutdown)
     pub audio_thread: Mutex<Option<JoinHandle<()>>>,
+    /// Shared flag to signal the TX thread to abort
+    pub tx_abort: Arc<AtomicBool>,
+    /// Handle to the TX thread (for clean shutdown)
+    pub tx_thread: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl AppState {
@@ -25,6 +29,8 @@ impl AppState {
             radio: Mutex::new(None),
             audio_running: Arc::new(AtomicBool::new(false)),
             audio_thread: Mutex::new(None),
+            tx_abort: Arc::new(AtomicBool::new(false)),
+            tx_thread: Mutex::new(None),
         }
     }
 }

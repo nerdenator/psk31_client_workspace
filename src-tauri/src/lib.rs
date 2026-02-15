@@ -53,6 +53,9 @@ pub fn run() {
             commands::radio::set_frequency,
             commands::radio::get_mode,
             commands::radio::set_mode,
+            // TX commands
+            commands::tx::start_tx,
+            commands::tx::stop_tx,
             // Configuration commands
             commands::config::save_configuration,
             commands::config::load_configuration,

@@ -166,32 +166,35 @@ impl VaricodeDecoder {
         }
     }
 
-    /// Push a bit into the decoder, returns decoded character if complete
+    /// Push a bit into the decoder, returns decoded character if complete.
+    ///
+    /// Key insight: zeros are *deferred* — we don't add them to the buffer
+    /// immediately because they might be the "00" separator between characters.
+    /// Only when a subsequent '1' arrives do we flush pending zeros into the
+    /// buffer (confirming they were internal to the varicode pattern).
     pub fn push_bit(&mut self, bit: bool) -> Option<char> {
-        if !bit {
+        if bit {
+            // Flush any pending zeros — they're internal to the code, not separators
+            for _ in 0..self.consecutive_zeros {
+                self.bit_buffer <<= 1; // zero bit
+                self.bit_count += 1;
+            }
+            self.consecutive_zeros = 0;
+
+            // Add the '1' bit
+            self.bit_buffer = (self.bit_buffer << 1) | 1;
+            self.bit_count += 1;
+        } else {
             self.consecutive_zeros += 1;
 
             if self.consecutive_zeros >= 2 && self.bit_count > 0 {
-                // Character boundary - look up the pattern
+                // "00" found = character boundary. Buffer has the complete code.
                 let ch = self.lookup_code();
                 self.bit_buffer = 0;
                 self.bit_count = 0;
                 self.consecutive_zeros = 0;
                 return ch;
             }
-        } else {
-            // Add bit to buffer (only if we're in a character)
-            if self.bit_count > 0 || self.consecutive_zeros < 2 {
-                self.bit_buffer = (self.bit_buffer << 1) | 1;
-                self.bit_count += 1;
-            }
-            self.consecutive_zeros = 0;
-        }
-
-        // Also accumulate zero bits (but not the trailing 00)
-        if !bit && self.consecutive_zeros < 2 {
-            self.bit_buffer <<= 1;
-            self.bit_count += 1;
         }
 
         None

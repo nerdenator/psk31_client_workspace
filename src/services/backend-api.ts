@@ -16,6 +16,15 @@ export async function stopAudioStream(): Promise<void> {
   return invoke('stop_audio_stream');
 }
 
+// TX commands
+export async function startTx(text: string, deviceId: string): Promise<void> {
+  return invoke('start_tx', { text, device_id: deviceId });
+}
+
+export async function stopTx(): Promise<void> {
+  return invoke('stop_tx');
+}
+
 // Serial commands
 export async function listSerialPorts(): Promise<SerialPortInfo[]> {
   return invoke('list_serial_ports');

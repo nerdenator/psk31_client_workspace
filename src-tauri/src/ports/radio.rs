@@ -3,7 +3,7 @@
 use crate::domain::{Frequency, Psk31Result};
 
 /// Trait for radio control (PTT, frequency, mode)
-pub trait RadioControl: Send + Sync {
+pub trait RadioControl: Send {
     /// Engage PTT (start transmitting)
     fn ptt_on(&mut self) -> Psk31Result<()>;
 

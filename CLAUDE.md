@@ -59,7 +59,7 @@ cargo test             # Run Rust unit tests (in src-tauri/)
 
 - [x] Phase 1: Project scaffolding, hexagonal module structure
 - [x] Phase 1.5: Frontend layout & visual tests
-- [ ] Phase 2: Serial / CAT communication with FT-991A
+- [x] Phase 2: Serial / CAT communication with FT-991A
 - [ ] Phase 3: Audio subsystem + waterfall display
 - [ ] Phase 4: PSK-31 TX path
 - [ ] Phase 5: PSK-31 RX path

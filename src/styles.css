@@ -645,6 +645,38 @@ html, body {
   border-color: var(--accent-freq);
 }
 
+.serial-connect-btn {
+  width: 100%;
+  margin-top: var(--gap-sm);
+  padding: var(--gap-sm);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: var(--border-subtle);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.serial-connect-btn:hover:not(:disabled) {
+  border-color: var(--accent-freq);
+  color: var(--accent-freq);
+}
+
+.serial-connect-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.serial-connect-btn.connected {
+  background: var(--accent-connected);
+  color: var(--bg-primary);
+  border-color: var(--accent-connected);
+}
+
 /* Connection Status */
 .connection-item {
   display: flex;
@@ -689,6 +721,14 @@ html, body {
 
 .status-text.connected {
   color: var(--accent-connected);
+}
+
+.status-dot.disconnected {
+  background: var(--accent-disconnected);
+}
+
+.status-text.disconnected {
+  color: var(--accent-disconnected);
 }
 
 /* ============================================

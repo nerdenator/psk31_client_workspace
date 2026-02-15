@@ -1,3 +1,4 @@
 //! Adapters - implementations of port traits
-//!
-//! TODO: Implement in Phases 2 & 3
+
+pub mod serial_port;
+pub mod ft991a;

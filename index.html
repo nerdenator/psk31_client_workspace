@@ -110,9 +110,8 @@ W1ABC DE K2XYZ R R BOB TNX FB QSO CUAGN 73 73 SK W1ABC DE K2XYZ</div>
             <div class="device-label">Serial Port</div>
             <select class="device-select" id="serial-port">
               <option value="">Select port...</option>
-              <option value="cu.usbserial-14220" selected>/dev/cu.usbserial-14220</option>
-              <option value="cu.usbserial-14230">/dev/cu.usbserial-14230</option>
             </select>
+            <button class="serial-connect-btn" id="serial-connect-btn">Connect</button>
           </div>
         </div>
 
@@ -140,11 +139,11 @@ W1ABC DE K2XYZ R R BOB TNX FB QSO CUAGN 73 73 SK W1ABC DE K2XYZ</div>
         <!-- Connection Status -->
         <div class="sidebar-section">
           <div class="section-label">Connections</div>
-          <div class="connection-item">
+          <div class="connection-item" id="cat-status">
             <span class="connection-name">CAT</span>
             <div class="connection-status">
-              <span class="status-dot connected"></span>
-              <span class="status-text connected">OK</span>
+              <span class="status-dot disconnected"></span>
+              <span class="status-text disconnected">N/C</span>
             </div>
           </div>
           <div class="connection-item">

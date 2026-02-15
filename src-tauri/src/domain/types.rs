@@ -83,3 +83,13 @@ impl Default for ModemStatus {
         }
     }
 }
+
+/// Radio connection information returned after successful connect
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadioInfo {
+    pub port: String,
+    pub baud_rate: u32,
+    pub frequency_hz: f64,
+    pub mode: String,
+    pub connected: bool,
+}

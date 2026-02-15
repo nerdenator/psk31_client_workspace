@@ -22,6 +22,14 @@ export interface Configuration {
   carrier_freq: number;
 }
 
+export interface RadioInfo {
+  port: string;
+  baud_rate: number;
+  frequency_hz: number;
+  mode: string;
+  connected: boolean;
+}
+
 export interface MenuEvent {
   id: string;
 }

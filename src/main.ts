@@ -11,6 +11,7 @@ import { setupTxInput } from './components/tx-input';
 import { setupTxButtons } from './components/control-panel';
 import { setupWaterfallClick } from './components/waterfall-controls';
 import { setupThemeToggle } from './components/theme-toggle';
+import { setupSerialPanel } from './components/serial-panel';
 import { setupMenuEvents } from './services/event-handlers';
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -25,5 +26,6 @@ window.addEventListener('DOMContentLoaded', () => {
   setupRxDisplay();
   setupWaterfallClick();
   setupThemeToggle();
+  setupSerialPanel();
   setupMenuEvents();
 });

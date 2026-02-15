@@ -42,6 +42,15 @@ pub fn run() {
             commands::audio::list_audio_devices,
             // Serial commands
             commands::serial::list_serial_ports,
+            commands::serial::connect_serial,
+            commands::serial::disconnect_serial,
+            // Radio commands
+            commands::radio::ptt_on,
+            commands::radio::ptt_off,
+            commands::radio::get_frequency,
+            commands::radio::set_frequency,
+            commands::radio::get_mode,
+            commands::radio::set_mode,
             // Configuration commands
             commands::config::save_configuration,
             commands::config::load_configuration,

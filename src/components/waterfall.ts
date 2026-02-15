@@ -9,6 +9,7 @@ export class WaterfallDisplay {
   private animationId: number = 0;
   private colorMap: Uint8ClampedArray[] = [];
   private resizeHandler = () => this.resize();
+  private liveMode: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -31,7 +32,9 @@ export class WaterfallDisplay {
 
   start(): void {
     const animate = () => {
-      this.drawFrame();
+      if (!this.liveMode) {
+        this.drawFrame();
+      }
       this.animationId = requestAnimationFrame(animate);
     };
     animate();
@@ -42,6 +45,69 @@ export class WaterfallDisplay {
       cancelAnimationFrame(this.animationId);
     }
     window.removeEventListener('resize', this.resizeHandler);
+  }
+
+  /** Switch between simulated and live FFT data */
+  setLiveMode(live: boolean): void {
+    this.liveMode = live;
+  }
+
+  /**
+   * Draw a single spectrum line from real FFT magnitudes (in dB).
+   * Called by the audio bridge when an fft-data event arrives.
+   *
+   * Maps the FFT bins covering 500-2500 Hz to the canvas width.
+   * dB normalization: (dbValue + 100) / 80 * 255 → 0-255 color index
+   */
+  drawSpectrum(magnitudes: number[]): void {
+    if (!this.imageData) return;
+
+    const width = this.canvas.width;
+    const height = this.canvas.height;
+    const data = this.imageData.data;
+
+    // Scroll existing data down by 1 row
+    for (let y = height - 1; y > 0; y--) {
+      for (let x = 0; x < width; x++) {
+        const srcIdx = ((y - 1) * width + x) * 4;
+        const dstIdx = (y * width + x) * 4;
+        data[dstIdx] = data[srcIdx];
+        data[dstIdx + 1] = data[srcIdx + 1];
+        data[dstIdx + 2] = data[srcIdx + 2];
+      }
+    }
+
+    // Map FFT bins to the 500-2500 Hz display range
+    // At 48 kHz sample rate with 4096-point FFT, each bin = 48000/4096 ≈ 11.72 Hz
+    // Bin index for freq f = f * fftSize / sampleRate
+    const sampleRate = 48000;
+    const fftSize = magnitudes.length * 2; // magnitudes is half the FFT size
+    const binWidth = sampleRate / fftSize;
+    const startBin = Math.floor(500 / binWidth);
+    const endBin = Math.ceil(2500 / binWidth);
+    const displayBins = endBin - startBin;
+
+    // Draw the new top row
+    for (let x = 0; x < width; x++) {
+      // Map pixel to FFT bin (linear interpolation)
+      const binFloat = startBin + (x / width) * displayBins;
+      const binIdx = Math.floor(binFloat);
+
+      // Clamp to valid range
+      const dbValue = binIdx < magnitudes.length ? magnitudes[binIdx] : -100;
+
+      // Normalize dB to 0-255 color index
+      // Typical range: -100 dB (silence) to -20 dB (strong signal)
+      const normalized = Math.min(255, Math.max(0, Math.floor(((dbValue + 100) / 80) * 255)));
+      const color = this.colorMap[normalized];
+
+      const idx = x * 4;
+      data[idx] = color[0];
+      data[idx + 1] = color[1];
+      data[idx + 2] = color[2];
+    }
+
+    this.ctx.putImageData(this.imageData, 0, 0);
   }
 
   private drawFrame(): void {

@@ -8,6 +8,14 @@ export async function listAudioDevices(): Promise<AudioDeviceInfo[]> {
   return invoke('list_audio_devices');
 }
 
+export async function startAudioStream(deviceId: string): Promise<void> {
+  return invoke('start_audio_stream', { device_id: deviceId });
+}
+
+export async function stopAudioStream(): Promise<void> {
+  return invoke('stop_audio_stream');
+}
+
 // Serial commands
 export async function listSerialPorts(): Promise<SerialPortInfo[]> {
   return invoke('list_serial_ports');

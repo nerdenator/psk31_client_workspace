@@ -1,0 +1,93 @@
+import { test, expect } from '@playwright/test';
+
+/**
+ * Phase 3 E2E tests for audio subsystem.
+ *
+ * These tests mock the Tauri `invoke()` function inline to simulate
+ * backend responses without real audio hardware.
+ */
+
+/** Mock window.__TAURI_INTERNALS__.invoke to intercept backend calls */
+function mockInvoke(
+  page: import('@playwright/test').Page,
+  handlers: Record<string, unknown>
+) {
+  return page.addInitScript((h) => {
+    (window as any).__TAURI_INTERNALS__ = {
+      invoke: (cmd: string, args?: any) => {
+        if (cmd in h) {
+          const value = h[cmd];
+          if (typeof value === 'function') {
+            return Promise.resolve((value as any)(args));
+          }
+          return Promise.resolve(value);
+        }
+        return Promise.resolve(null);
+      },
+      metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
+      convertFileSrc: (src: string) => src,
+    };
+  }, handlers);
+}
+
+test.describe('Audio Panel', () => {
+  test('audio input dropdown populates from backend', async ({ page }) => {
+    await mockInvoke(page, {
+      list_audio_devices: [
+        { id: 'FT-991A USB Audio', name: 'FT-991A USB Audio', is_input: true, is_default: false },
+        { id: 'Built-in Microphone', name: 'Built-in Microphone', is_input: true, is_default: true },
+        { id: 'Built-in Speakers', name: 'Built-in Speakers', is_input: false, is_default: true },
+      ],
+    });
+
+    await page.goto('/');
+
+    const dropdown = page.locator('#audio-input');
+    await expect(dropdown).toBeVisible();
+
+    // Should have placeholder + 2 input devices
+    const options = dropdown.locator('option');
+    await expect(options).toHaveCount(3);
+    await expect(options.nth(1)).toContainText('FT-991A USB Audio');
+    await expect(options.nth(2)).toContainText('Built-in Microphone');
+  });
+
+  test('default device marked in dropdown', async ({ page }) => {
+    await mockInvoke(page, {
+      list_audio_devices: [
+        { id: 'FT-991A USB Audio', name: 'FT-991A USB Audio', is_input: true, is_default: false },
+        { id: 'Built-in Microphone', name: 'Built-in Microphone', is_input: true, is_default: true },
+      ],
+    });
+
+    await page.goto('/');
+
+    const dropdown = page.locator('#audio-input');
+    const defaultOption = dropdown.locator('option:has-text("(Default)")');
+    await expect(defaultOption).toHaveCount(1);
+    await expect(defaultOption).toContainText('Built-in Microphone');
+  });
+
+  test('waterfall canvas renders and is visible', async ({ page }) => {
+    await mockInvoke(page, { list_audio_devices: [] });
+    await page.goto('/');
+
+    const canvas = page.locator('#waterfall-canvas');
+    await expect(canvas).toBeVisible();
+
+    const box = await canvas.boundingBox();
+    expect(box?.width).toBeGreaterThan(100);
+    expect(box?.height).toBeGreaterThan(50);
+  });
+
+  test('audio status shows N/C by default', async ({ page }) => {
+    await mockInvoke(page, { list_audio_devices: [] });
+    await page.goto('/');
+
+    const audioInText = page.locator('#audio-in-status .status-text');
+    await expect(audioInText).toHaveText('N/C');
+
+    const audioInDot = page.locator('#audio-in-status .status-dot');
+    await expect(audioInDot).toHaveClass(/disconnected/);
+  });
+});

@@ -1,8 +1,7 @@
 /**
  * PSK-31 Client - Main Application Entry
  *
- * This is the UI shell with mocked/simulated data for Phase 1.5.
- * Real backend integration happens in later phases.
+ * Phases 1-3: Serial/CAT, audio input, and waterfall display.
  */
 
 import { WaterfallDisplay } from './components/waterfall';
@@ -12,12 +11,16 @@ import { setupTxButtons } from './components/control-panel';
 import { setupWaterfallClick } from './components/waterfall-controls';
 import { setupThemeToggle } from './components/theme-toggle';
 import { setupSerialPanel } from './components/serial-panel';
+import { setupAudioPanel } from './components/audio-panel';
 import { setupMenuEvents } from './services/event-handlers';
+import { startFftBridge, listenAudioStatus } from './services/audio-bridge';
 
 window.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('waterfall-canvas') as HTMLCanvasElement;
+  let waterfall: WaterfallDisplay | null = null;
+
   if (canvas) {
-    const waterfall = new WaterfallDisplay(canvas);
+    waterfall = new WaterfallDisplay(canvas);
     waterfall.start();
   }
 
@@ -27,5 +30,12 @@ window.addEventListener('DOMContentLoaded', () => {
   setupWaterfallClick();
   setupThemeToggle();
   setupSerialPanel();
+  setupAudioPanel();
   setupMenuEvents();
+
+  // Wire up audio bridge: FFT events → waterfall display
+  if (waterfall) {
+    startFftBridge(waterfall);
+    listenAudioStatus(waterfall);
+  }
 });

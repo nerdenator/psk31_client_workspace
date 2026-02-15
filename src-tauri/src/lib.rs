@@ -40,6 +40,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Audio commands
             commands::audio::list_audio_devices,
+            commands::audio::start_audio_stream,
+            commands::audio::stop_audio_stream,
             // Serial commands
             commands::serial::list_serial_ports,
             commands::serial::connect_serial,

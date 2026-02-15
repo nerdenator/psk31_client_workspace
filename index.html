@@ -122,16 +122,12 @@ W1ABC DE K2XYZ R R BOB TNX FB QSO CUAGN 73 73 SK W1ABC DE K2XYZ</div>
             <div class="device-label">Input</div>
             <select class="device-select" id="audio-input">
               <option value="">Select device...</option>
-              <option value="ft991a" selected>FT-991A USB Audio</option>
-              <option value="builtin">Built-in Microphone</option>
             </select>
           </div>
           <div class="device-group">
             <div class="device-label">Output</div>
             <select class="device-select" id="audio-output">
               <option value="">Select device...</option>
-              <option value="ft991a" selected>FT-991A USB Audio</option>
-              <option value="builtin">Built-in Speakers</option>
             </select>
           </div>
         </div>
@@ -146,18 +142,18 @@ W1ABC DE K2XYZ R R BOB TNX FB QSO CUAGN 73 73 SK W1ABC DE K2XYZ</div>
               <span class="status-text disconnected">N/C</span>
             </div>
           </div>
-          <div class="connection-item">
+          <div class="connection-item" id="audio-in-status">
             <span class="connection-name">Audio In</span>
             <div class="connection-status">
-              <span class="status-dot connected"></span>
-              <span class="status-text connected">OK</span>
+              <span class="status-dot disconnected"></span>
+              <span class="status-text disconnected">N/C</span>
             </div>
           </div>
-          <div class="connection-item">
+          <div class="connection-item" id="audio-out-status">
             <span class="connection-name">Audio Out</span>
             <div class="connection-status">
-              <span class="status-dot connected"></span>
-              <span class="status-text connected">OK</span>
+              <span class="status-dot disconnected"></span>
+              <span class="status-text disconnected">N/C</span>
             </div>
           </div>
         </div>

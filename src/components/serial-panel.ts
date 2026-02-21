@@ -1,6 +1,7 @@
 /** Serial panel — populates port dropdown, wires connect/disconnect button */
 
 import { listSerialPorts, connectSerial, disconnectSerial } from '../services/backend-api';
+import { setSerialState } from '../services/app-state';
 
 /** Default baud rate for FT-991A */
 const DEFAULT_BAUD_RATE = 38400;
@@ -54,6 +55,7 @@ export function setupSerialPanel(): void {
       if (thisConnection !== connectionId) return;
 
       connected = true;
+      setSerialState(true, port);
 
       // Update frequency display (e.g. 14070000 → "14.070.000")
       if (freqValue) {
@@ -112,6 +114,7 @@ export function setupSerialPanel(): void {
 
   function resetUi(): void {
     connected = false;
+    setSerialState(false, null);
     connectionId++; // Invalidate any pending async callbacks or timeouts
     if (flashTimeout) {
       clearTimeout(flashTimeout);

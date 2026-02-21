@@ -40,9 +40,11 @@ pub fn connect_serial(
         connected: true,
     };
 
-    // Store radio in app state
+    // Store radio and port name in app state
     let mut radio_slot = state.radio.lock().map_err(|_| "Radio state corrupted".to_string())?;
     *radio_slot = Some(Box::new(radio));
+    *state.serial_port_name.lock().map_err(|_| "Serial port state corrupted".to_string())? =
+        Some(port.clone());
 
     Ok(info)
 }
@@ -52,5 +54,7 @@ pub fn disconnect_serial(state: State<AppState>) -> Result<(), String> {
     let mut radio_slot = state.radio.lock().map_err(|_| "Radio state corrupted".to_string())?;
     // Drop will auto-release PTT if transmitting
     *radio_slot = None;
+    *state.serial_port_name.lock().map_err(|_| "Serial port state corrupted".to_string())? =
+        None;
     Ok(())
 }

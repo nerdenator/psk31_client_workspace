@@ -23,6 +23,10 @@ pub struct AppState {
     pub rx_running: Arc<AtomicBool>,
     /// Carrier frequency for RX decoder (updated by click-to-tune)
     pub rx_carrier_freq: Arc<Mutex<f64>>,
+    /// Name of the currently active audio input device (None if not streaming)
+    pub audio_device_name: Mutex<Option<String>>,
+    /// Name of the currently connected serial port (None if not connected)
+    pub serial_port_name: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -37,6 +41,8 @@ impl AppState {
             tx_thread: Mutex::new(None),
             rx_running: Arc::new(AtomicBool::new(false)),
             rx_carrier_freq: Arc::new(Mutex::new(1000.0)),
+            audio_device_name: Mutex::new(None),
+            serial_port_name: Mutex::new(None),
         }
     }
 }

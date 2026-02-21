@@ -42,6 +42,12 @@ struct RxTextPayload {
     text: String,
 }
 
+/// Payload for the `signal-level` event — normalized AGC-derived signal strength
+#[derive(Clone, Serialize)]
+struct SignalLevelPayload {
+    level: f32,
+}
+
 #[tauri::command]
 pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, String> {
     let input = CpalAudioInput::new();
@@ -61,6 +67,11 @@ pub fn start_audio_stream(
 
     let running = state.audio_running.clone();
     running.store(true, Ordering::SeqCst);
+
+    *state
+        .audio_device_name
+        .lock()
+        .map_err(|_| "Audio state corrupted".to_string())? = Some(device_id.clone());
 
     let rx_running = state.rx_running.clone();
     let rx_carrier_freq = state.rx_carrier_freq.clone();
@@ -86,10 +97,16 @@ pub fn stop_audio_stream(state: tauri::State<'_, AppState>) -> Result<(), String
     // Signal the thread to stop
     state.audio_running.store(false, Ordering::SeqCst);
 
-    // Join the thread (wait for clean shutdown)
+    // Join the thread first — ensures no more signal-level events will fire
     if let Some(handle) = state.audio_thread.lock().unwrap().take() {
         handle.join().map_err(|_| "Audio thread panicked".to_string())?;
     }
+
+    // Clear stored device name after thread is fully stopped
+    *state
+        .audio_device_name
+        .lock()
+        .map_err(|_| "Audio state corrupted".to_string())? = None;
 
     Ok(())
 }
@@ -176,6 +193,9 @@ fn run_audio_thread(
     // Buffer decoded chars to emit in batches (reduces event overhead)
     let mut rx_text_buf = String::new();
 
+    // Throttle signal-level events to ~500ms (100 iterations × 5ms sleep)
+    let mut signal_emit_counter: u32 = 0;
+
     while running.load(Ordering::SeqCst) {
         // Drain available samples from ring buffer into a temporary vec
         // so we can use them for both FFT and RX decoding
@@ -216,6 +236,18 @@ fn run_audio_thread(
 
             // Advance by hop_size (keep the overlap portion)
             sample_buf.drain(..hop_size);
+        }
+
+        // Emit signal level every ~500ms (100 iterations)
+        signal_emit_counter += 1;
+        if signal_emit_counter >= 100 {
+            signal_emit_counter = 0;
+            let level = if rx_running.load(Ordering::Relaxed) {
+                decoder.signal_strength()
+            } else {
+                0.0
+            };
+            let _ = app.emit("signal-level", SignalLevelPayload { level });
         }
 
         // Sleep to avoid busy-waiting (~5ms = well within 42ms frame budget)

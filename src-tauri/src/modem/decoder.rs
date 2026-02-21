@@ -123,6 +123,16 @@ impl Psk31Decoder {
         self.invert_bits = false;
     }
 
+    /// Signal strength as a 0.0..=1.0 value derived from AGC gain.
+    ///
+    /// The AGC gain is inversely proportional to signal level: low gain = strong signal.
+    /// Gain range is [0.01, 100.0], mapped via inverse log10 to [1.0, 0.0]:
+    ///   gain=0.01 → 1.0 (strong), gain=1.0 → 0.5, gain=100.0 → 0.0 (absent)
+    pub fn signal_strength(&self) -> f32 {
+        let gain = self.agc.current_gain().clamp(0.01, 100.0);
+        (1.0 - (gain.log10() + 2.0) / 4.0).clamp(0.0, 1.0)
+    }
+
     /// Reset all decoder state
     pub fn reset(&mut self) {
         self.agc.reset();

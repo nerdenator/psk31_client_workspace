@@ -33,3 +33,10 @@ export interface RadioInfo {
 export interface MenuEvent {
   id: string;
 }
+
+export interface ConnectionStatus {
+  serial_connected: boolean;
+  serial_port: string | null;
+  audio_streaming: boolean;
+  audio_device: string | null;
+}

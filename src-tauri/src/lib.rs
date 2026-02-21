@@ -65,6 +65,8 @@ pub fn run() {
             commands::config::load_configuration,
             commands::config::list_configurations,
             commands::config::delete_configuration,
+            // Status command
+            commands::status::get_connection_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

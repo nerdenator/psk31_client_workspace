@@ -1,7 +1,7 @@
 /** Typed wrappers for all Tauri backend commands */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { Configuration, AudioDeviceInfo, SerialPortInfo, RadioInfo } from '../types';
+import type { Configuration, AudioDeviceInfo, SerialPortInfo, RadioInfo, ConnectionStatus } from '../types';
 
 // Audio commands
 export async function listAudioDevices(): Promise<AudioDeviceInfo[]> {
@@ -91,4 +91,9 @@ export async function listConfigurations(): Promise<string[]> {
 
 export async function deleteConfiguration(name: string): Promise<void> {
   return invoke('delete_configuration', { name });
+}
+
+// Status commands
+export async function getConnectionStatus(): Promise<ConnectionStatus> {
+  return invoke('get_connection_status');
 }

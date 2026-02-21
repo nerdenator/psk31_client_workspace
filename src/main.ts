@@ -12,6 +12,7 @@ import { setupWaterfallClick } from './components/waterfall-controls';
 import { setupThemeToggle } from './components/theme-toggle';
 import { setupSerialPanel } from './components/serial-panel';
 import { setupAudioPanel } from './components/audio-panel';
+import { setupStatusBar } from './components/status-bar';
 import { setupMenuEvents } from './services/event-handlers';
 import { startFftBridge, listenAudioStatus } from './services/audio-bridge';
 import { startRxBridge } from './services/rx-bridge';
@@ -34,6 +35,11 @@ window.addEventListener('DOMContentLoaded', () => {
   setupSerialPanel();
   setupAudioPanel();
   setupMenuEvents();
+
+  // Status bar — after serial/audio panels so they can fire setters on connect
+  setupStatusBar().catch((err) => {
+    console.error('Failed to set up status bar:', err);
+  });
 
   // Wire up audio bridge: FFT events → waterfall display
   if (waterfall) {

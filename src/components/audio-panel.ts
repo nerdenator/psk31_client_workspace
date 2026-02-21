@@ -1,6 +1,7 @@
 /** Audio panel — populates device dropdowns, wires start/stop audio stream */
 
 import { listAudioDevices, startAudioStream, stopAudioStream } from '../services/backend-api';
+import { setAudioState } from '../services/app-state';
 
 export function setupAudioPanel(): void {
   const inputDropdown = document.getElementById('audio-input') as HTMLSelectElement;
@@ -28,6 +29,7 @@ export function setupAudioPanel(): void {
         console.error('Failed to stop audio stream:', err);
       }
       streaming = false;
+      setAudioState(false, null);
     }
 
     if (!deviceId) {
@@ -37,13 +39,16 @@ export function setupAudioPanel(): void {
     }
 
     // Start streaming from the selected device
+    const deviceName = inputDropdown.options[inputDropdown.selectedIndex]?.text ?? deviceId;
     try {
       await startAudioStream(deviceId);
       streaming = true;
       setStatus('connected', 'OK');
+      setAudioState(true, deviceName);
     } catch (err) {
       console.error('Failed to start audio stream:', err);
       setStatus('disconnected', 'Error');
+      setAudioState(false, null);
     }
   });
 

@@ -1,14 +1,18 @@
-//! Audio commands — list devices, start/stop FFT streaming
+//! Audio commands — list devices, start/stop FFT streaming, RX decoding
 //!
 //! Architecture: `cpal::Stream` is `!Send` (like a Python object bound to one thread).
 //! So we can't store it in AppState behind a Mutex. Instead, `start_audio_stream`
 //! spawns a dedicated audio thread that owns the CpalAudioInput and ring buffer.
 //! AppState only holds an AtomicBool shutdown flag and the thread's JoinHandle.
+//!
+//! The RX decoder runs inside the same audio thread — when `rx_running` is true,
+//! each audio sample is fed to the Psk31Decoder alongside FFT processing.
 
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
 use serde::Serialize;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -16,6 +20,7 @@ use tauri::{AppHandle, Emitter};
 use crate::adapters::cpal_audio::CpalAudioInput;
 use crate::domain::AudioDeviceInfo;
 use crate::dsp::fft::FftProcessor;
+use crate::modem::decoder::Psk31Decoder;
 use crate::ports::AudioInput;
 use crate::state::AppState;
 
@@ -29,6 +34,12 @@ struct FftPayload {
 #[derive(Clone, Serialize)]
 struct AudioStatusPayload {
     status: String,
+}
+
+/// Payload for the `rx-text` event — decoded characters from the RX decoder
+#[derive(Clone, Serialize)]
+struct RxTextPayload {
+    text: String,
 }
 
 #[tauri::command]
@@ -51,8 +62,11 @@ pub fn start_audio_stream(
     let running = state.audio_running.clone();
     running.store(true, Ordering::SeqCst);
 
+    let rx_running = state.rx_running.clone();
+    let rx_carrier_freq = state.rx_carrier_freq.clone();
+
     let handle = thread::spawn(move || {
-        run_audio_thread(app, running, device_id);
+        run_audio_thread(app, running, rx_running, rx_carrier_freq, device_id);
     });
 
     state
@@ -66,6 +80,9 @@ pub fn start_audio_stream(
 
 #[tauri::command]
 pub fn stop_audio_stream(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    // Stop RX decoder first (it runs inside the audio thread)
+    state.rx_running.store(false, Ordering::SeqCst);
+
     // Signal the thread to stop
     state.audio_running.store(false, Ordering::SeqCst);
 
@@ -77,10 +94,45 @@ pub fn stop_audio_stream(state: tauri::State<'_, AppState>) -> Result<(), String
     Ok(())
 }
 
+#[tauri::command]
+pub fn start_rx(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if !state.audio_running.load(Ordering::SeqCst) {
+        return Err("Audio stream not running. Start audio first.".into());
+    }
+    state.rx_running.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_rx(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.rx_running.store(false, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_carrier_frequency(
+    state: tauri::State<'_, AppState>,
+    freq_hz: f64,
+) -> Result<(), String> {
+    if !(200.0..=3500.0).contains(&freq_hz) {
+        return Err("Carrier frequency must be between 200-3500 Hz".into());
+    }
+    *state.rx_carrier_freq.lock().unwrap() = freq_hz;
+    // Also update config for TX consistency
+    state.config.lock().unwrap().carrier_freq = freq_hz;
+    Ok(())
+}
+
 /// The main audio processing loop, runs on its own thread.
 ///
-/// Flow: cpal callback → ring buffer → DSP loop → FFT → emit event
-fn run_audio_thread(app: AppHandle, running: std::sync::Arc<std::sync::atomic::AtomicBool>, device_id: String) {
+/// Flow: cpal callback → ring buffer → DSP loop → FFT + RX decoder → emit events
+fn run_audio_thread(
+    app: AppHandle,
+    running: Arc<AtomicBool>,
+    rx_running: Arc<AtomicBool>,
+    rx_carrier_freq: Arc<Mutex<f64>>,
+    device_id: String,
+) {
     // Emit status
     let _ = app.emit("audio-status", AudioStatusPayload { status: "running".into() });
 
@@ -110,17 +162,52 @@ fn run_audio_thread(app: AppHandle, running: std::sync::Arc<std::sync::atomic::A
         return;
     }
 
-    // DSP loop: pull samples, compute FFT, emit to frontend
+    // DSP loop: pull samples, compute FFT + RX decode, emit to frontend
     let fft_size = 4096;
     let hop_size = 2048; // 50% overlap for smooth waterfall scrolling
     let mut fft = FftProcessor::new(fft_size);
     let mut sample_buf: Vec<f32> = Vec::with_capacity(fft_size);
 
+    // RX decoder — created with initial carrier freq, retuned dynamically
+    let initial_carrier = *rx_carrier_freq.lock().unwrap();
+    let mut decoder = Psk31Decoder::new(initial_carrier, 48000);
+    let mut current_carrier = initial_carrier;
+
+    // Buffer decoded chars to emit in batches (reduces event overhead)
+    let mut rx_text_buf = String::new();
+
     while running.load(Ordering::SeqCst) {
-        // Drain available samples from ring buffer
+        // Drain available samples from ring buffer into a temporary vec
+        // so we can use them for both FFT and RX decoding
+        let mut new_samples: Vec<f32> = Vec::new();
         while let Some(sample) = consumer.try_pop() {
-            sample_buf.push(sample);
+            new_samples.push(sample);
         }
+
+        // RX decoding: feed every new sample to the decoder when enabled
+        if rx_running.load(Ordering::SeqCst) {
+            // Check if carrier frequency changed (click-to-tune)
+            let target_carrier = *rx_carrier_freq.lock().unwrap();
+            if (target_carrier - current_carrier).abs() > 0.1 {
+                decoder.set_carrier_freq(target_carrier);
+                current_carrier = target_carrier;
+            }
+
+            for &sample in &new_samples {
+                if let Some(ch) = decoder.process(sample) {
+                    rx_text_buf.push(ch);
+                }
+            }
+
+            // Emit any decoded text as a batch
+            if !rx_text_buf.is_empty() {
+                let _ = app.emit("rx-text", RxTextPayload { text: rx_text_buf.clone() });
+                rx_text_buf.clear();
+            }
+        }
+
+        // Accumulate samples for FFT processing
+        sample_buf.extend_from_slice(&new_samples);
 
         // When we have enough samples, compute FFT with 50% overlap
         while sample_buf.len() >= fft_size {

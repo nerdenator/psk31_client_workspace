@@ -1,5 +1,7 @@
 /** Waterfall click-to-tune interaction */
 
+import { setCarrierFrequency } from '../services/backend-api';
+
 export function setupWaterfallClick(): void {
   const canvas = document.getElementById('waterfall-canvas') as HTMLCanvasElement;
   const freqDisplay = document.querySelector('.waterfall-freq') as HTMLElement;
@@ -25,6 +27,11 @@ export function setupWaterfallClick(): void {
       if (audioCarrierValue) {
         audioCarrierValue.textContent = freq.toString();
       }
+
+      // Tell the backend decoder to retune to this frequency
+      setCarrierFrequency(freq).catch((err) => {
+        console.warn('Failed to set carrier frequency:', err);
+      });
     });
   }
 }

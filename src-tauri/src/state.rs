@@ -19,6 +19,10 @@ pub struct AppState {
     pub tx_abort: Arc<AtomicBool>,
     /// Handle to the TX thread (for clean shutdown)
     pub tx_thread: Mutex<Option<JoinHandle<()>>>,
+    /// Shared flag to enable/disable the RX decoder in the audio thread
+    pub rx_running: Arc<AtomicBool>,
+    /// Carrier frequency for RX decoder (updated by click-to-tune)
+    pub rx_carrier_freq: Arc<Mutex<f64>>,
 }
 
 impl AppState {
@@ -31,6 +35,8 @@ impl AppState {
             audio_thread: Mutex::new(None),
             tx_abort: Arc::new(AtomicBool::new(false)),
             tx_thread: Mutex::new(None),
+            rx_running: Arc::new(AtomicBool::new(false)),
+            rx_carrier_freq: Arc::new(Mutex::new(1000.0)),
         }
     }
 }

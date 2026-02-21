@@ -16,6 +16,19 @@ export async function stopAudioStream(): Promise<void> {
   return invoke('stop_audio_stream');
 }
 
+// RX commands
+export async function startRx(): Promise<void> {
+  return invoke('start_rx');
+}
+
+export async function stopRx(): Promise<void> {
+  return invoke('stop_rx');
+}
+
+export async function setCarrierFrequency(freqHz: number): Promise<void> {
+  return invoke('set_carrier_frequency', { freq_hz: freqHz });
+}
+
 // TX commands
 export async function startTx(text: string, deviceId: string): Promise<void> {
   return invoke('start_tx', { text, device_id: deviceId });

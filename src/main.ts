@@ -14,6 +14,8 @@ import { setupSerialPanel } from './components/serial-panel';
 import { setupAudioPanel } from './components/audio-panel';
 import { setupMenuEvents } from './services/event-handlers';
 import { startFftBridge, listenAudioStatus } from './services/audio-bridge';
+import { startRxBridge } from './services/rx-bridge';
+import { appendRxText } from './components/rx-display';
 
 window.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('waterfall-canvas') as HTMLCanvasElement;
@@ -38,4 +40,9 @@ window.addEventListener('DOMContentLoaded', () => {
     startFftBridge(waterfall);
     listenAudioStatus(waterfall);
   }
+
+  // Wire up RX bridge: decoded text events → RX display
+  startRxBridge(appendRxText).catch((err) => {
+    console.error('Failed to start RX bridge:', err);
+  });
 });

@@ -42,6 +42,10 @@ pub fn run() {
             commands::audio::list_audio_devices,
             commands::audio::start_audio_stream,
             commands::audio::stop_audio_stream,
+            // RX commands
+            commands::audio::start_rx,
+            commands::audio::stop_rx,
+            commands::audio::set_carrier_frequency,
             // Serial commands
             commands::serial::list_serial_ports,
             commands::serial::connect_serial,

@@ -47,3 +47,81 @@ impl Agc {
         self.gain = 1.0;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_loud_signal_reduces_gain() {
+        let mut agc = Agc::new(0.5);
+        let initial_gain = agc.current_gain();
+
+        // Feed loud signal (amplitude 1.0, above target 0.5)
+        for _ in 0..1000 {
+            agc.process(1.0);
+        }
+
+        assert!(
+            agc.current_gain() < initial_gain,
+            "Gain should decrease for loud signals"
+        );
+    }
+
+    #[test]
+    fn test_quiet_signal_increases_gain() {
+        let mut agc = Agc::new(0.5);
+        let initial_gain = agc.current_gain();
+
+        // Feed very quiet signal
+        for _ in 0..1000 {
+            agc.process(0.01);
+        }
+
+        assert!(
+            agc.current_gain() > initial_gain,
+            "Gain should increase for quiet signals"
+        );
+    }
+
+    #[test]
+    fn test_gain_stays_within_bounds() {
+        let mut agc = Agc::new(0.5);
+
+        // Drive gain up with silence
+        for _ in 0..100_000 {
+            agc.process(0.0001);
+        }
+        assert!(agc.current_gain() <= 100.0);
+
+        // Drive gain down with max amplitude
+        agc.reset();
+        for _ in 0..100_000 {
+            agc.process(1.0);
+        }
+        assert!(agc.current_gain() >= 0.01);
+    }
+
+    #[test]
+    fn test_output_clamped() {
+        let mut agc = Agc::new(0.5);
+        // Pump gain up first with quiet signal
+        for _ in 0..10_000 {
+            agc.process(0.001);
+        }
+        // Now feed a loud sample — output should be clamped
+        let output = agc.process(1.0);
+        assert!(output >= -1.0 && output <= 1.0);
+    }
+
+    #[test]
+    fn test_reset() {
+        let mut agc = Agc::new(0.5);
+        for _ in 0..5000 {
+            agc.process(0.01);
+        }
+        assert_ne!(agc.current_gain(), 1.0);
+        agc.reset();
+        assert_eq!(agc.current_gain(), 1.0);
+    }
+}

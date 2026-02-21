@@ -9,6 +9,13 @@ const DEFAULT_BAUD_RATE = 38400;
 /** How long the connect button stays green after a successful connection (ms) */
 const SUCCESS_FLASH_MS = 10_000;
 
+let _resetUi: (() => void) | null = null;
+
+/** Reset the serial panel to disconnected state (e.g. on backend-initiated disconnect) */
+export function resetSerialPanel(): void {
+  _resetUi?.();
+}
+
 export function setupSerialPanel(): void {
   const dropdown = document.getElementById('serial-port') as HTMLSelectElement;
   const connectBtn = document.getElementById('serial-connect-btn') as HTMLButtonElement;
@@ -135,6 +142,9 @@ export function setupSerialPanel(): void {
       catText.textContent = 'N/C';
     }
   }
+
+  // Expose resetUi so resetSerialPanel() can call it from outside
+  _resetUi = resetUi;
 }
 
 /** Fetch serial ports from backend and populate the dropdown */

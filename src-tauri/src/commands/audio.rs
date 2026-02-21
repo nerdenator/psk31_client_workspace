@@ -75,9 +75,10 @@ pub fn start_audio_stream(
 
     let rx_running = state.rx_running.clone();
     let rx_carrier_freq = state.rx_carrier_freq.clone();
+    let audio_device_name = state.audio_device_name.clone();
 
     let handle = thread::spawn(move || {
-        run_audio_thread(app, running, rx_running, rx_carrier_freq, device_id);
+        run_audio_thread(app, running, rx_running, rx_carrier_freq, audio_device_name, device_id);
     });
 
     state
@@ -97,16 +98,10 @@ pub fn stop_audio_stream(state: tauri::State<'_, AppState>) -> Result<(), String
     // Signal the thread to stop
     state.audio_running.store(false, Ordering::SeqCst);
 
-    // Join the thread first — ensures no more signal-level events will fire
+    // Join the thread — it clears audio_device_name on exit
     if let Some(handle) = state.audio_thread.lock().unwrap().take() {
         handle.join().map_err(|_| "Audio thread panicked".to_string())?;
     }
-
-    // Clear stored device name after thread is fully stopped
-    *state
-        .audio_device_name
-        .lock()
-        .map_err(|_| "Audio state corrupted".to_string())? = None;
 
     Ok(())
 }
@@ -148,6 +143,7 @@ fn run_audio_thread(
     running: Arc<AtomicBool>,
     rx_running: Arc<AtomicBool>,
     rx_carrier_freq: Arc<Mutex<f64>>,
+    audio_device_name: Arc<Mutex<Option<String>>>,
     device_id: String,
 ) {
     // Emit status
@@ -196,7 +192,16 @@ fn run_audio_thread(
     // Throttle signal-level events to ~500ms (100 iterations × 5ms sleep)
     let mut signal_emit_counter: u32 = 0;
 
+    // Set when cpal error callback fires (device removed mid-stream)
+    let mut device_lost = false;
+
     while running.load(Ordering::SeqCst) {
+        // Check if cpal silently killed the stream (e.g. USB device removed)
+        if !audio_input.is_running() {
+            running.store(false, Ordering::SeqCst);
+            device_lost = true;
+            break;
+        }
         // Drain available samples from ring buffer into a temporary vec
         // so we can use them for both FFT and RX decoding
         let mut new_samples: Vec<f32> = Vec::new();
@@ -256,5 +261,12 @@ fn run_audio_thread(
 
     // Clean shutdown
     let _ = audio_input.stop();
-    let _ = app.emit("audio-status", AudioStatusPayload { status: "stopped".into() });
+    *audio_device_name.lock().unwrap() = None;
+
+    let status = if device_lost {
+        "error: audio device lost".to_string()
+    } else {
+        "stopped".to_string()
+    };
+    let _ = app.emit("audio-status", AudioStatusPayload { status });
 }

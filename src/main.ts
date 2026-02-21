@@ -11,11 +11,13 @@ import { setupTxButtons } from './components/control-panel';
 import { setupWaterfallClick } from './components/waterfall-controls';
 import { setupThemeToggle } from './components/theme-toggle';
 import { setupSerialPanel } from './components/serial-panel';
-import { setupAudioPanel } from './components/audio-panel';
+import { setupAudioPanel, resetAudioPanel } from './components/audio-panel';
 import { setupStatusBar } from './components/status-bar';
+import { showToast } from './components/toast';
 import { setupMenuEvents } from './services/event-handlers';
 import { startFftBridge, listenAudioStatus } from './services/audio-bridge';
 import { startRxBridge } from './services/rx-bridge';
+import { startSerialBridge } from './services/serial-bridge';
 import { appendRxText } from './components/rx-display';
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -41,11 +43,21 @@ window.addEventListener('DOMContentLoaded', () => {
     console.error('Failed to set up status bar:', err);
   });
 
-  // Wire up audio bridge: FFT events → waterfall display
+  // Wire up audio bridge: FFT events → waterfall; error status → toast + reset UI
   if (waterfall) {
     startFftBridge(waterfall);
-    listenAudioStatus(waterfall);
+    listenAudioStatus(waterfall, (status) => {
+      if (status.startsWith('error:')) {
+        resetAudioPanel();
+        showToast('Audio device lost', 'error');
+      }
+    });
   }
+
+  // Wire up serial bridge: backend-initiated disconnect → toast + reset UI
+  startSerialBridge().catch((err) => {
+    console.error('Failed to start serial bridge:', err);
+  });
 
   // Wire up RX bridge: decoded text events → RX display
   startRxBridge(appendRxText).catch((err) => {

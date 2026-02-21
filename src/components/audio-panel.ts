@@ -3,12 +3,20 @@
 import { listAudioDevices, startAudioStream, stopAudioStream } from '../services/backend-api';
 import { setAudioState } from '../services/app-state';
 
+let _resetAudio: (() => void) | null = null;
+
+/** Reset the audio panel to stopped state (e.g. on backend-initiated device loss) */
+export function resetAudioPanel(): void {
+  _resetAudio?.();
+}
+
 export function setupAudioPanel(): void {
   const inputDropdown = document.getElementById('audio-input') as HTMLSelectElement;
   const outputDropdown = document.getElementById('audio-output') as HTMLSelectElement;
   const audioInStatus = document.getElementById('audio-in-status');
   const audioDot = audioInStatus?.querySelector('.status-dot') as HTMLElement | null;
   const audioText = audioInStatus?.querySelector('.status-text') as HTMLElement | null;
+  const refreshBtn = document.getElementById('audio-refresh-btn') as HTMLButtonElement | null;
 
   if (!inputDropdown) return;
 
@@ -63,6 +71,20 @@ export function setupAudioPanel(): void {
       audioText.textContent = text;
     }
   }
+
+  function resetAudio(): void {
+    streaming = false;
+    setAudioState(false, null);
+    setStatus('disconnected', 'N/C');
+    inputDropdown.value = '';
+  }
+
+  // Refresh button — re-enumerates devices without restarting the app
+  refreshBtn?.addEventListener('click', () => {
+    populateDropdowns(inputDropdown, outputDropdown);
+  });
+
+  _resetAudio = resetAudio;
 }
 
 /** Fetch audio devices from backend and populate both dropdowns */

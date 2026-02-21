@@ -526,12 +526,30 @@ html, body {
 }
 
 .section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--text-dim);
   margin-bottom: var(--gap-sm);
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.refresh-btn:hover {
+  color: var(--text-primary);
 }
 
 /* Frequency Display */
@@ -837,4 +855,44 @@ html, body {
 .theme-toggle-icon {
   font-size: 12px;
   line-height: 1;
+}
+
+/* ============================================================
+   Toast notifications
+   ============================================================ */
+
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 9px 13px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-panel);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+  z-index: 1000;
+  max-width: 280px;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.toast.toast-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.toast-error {
+  border-left: 3px solid var(--accent-tx);
+}
+
+.toast.toast-warning {
+  border-left: 3px solid var(--accent-warning);
+}
+
+.toast.toast-info {
+  border-left: 3px solid var(--accent-freq);
 }

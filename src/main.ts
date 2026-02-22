@@ -5,10 +5,11 @@
  */
 
 import { WaterfallDisplay } from './components/waterfall';
+import type { WaterfallSettings } from './components/waterfall';
 import { setupRxDisplay } from './components/rx-display';
 import { setupTxInput } from './components/tx-input';
 import { setupTxButtons } from './components/control-panel';
-import { setupWaterfallClick } from './components/waterfall-controls';
+import { setupWaterfallClick, setupWaterfallControls } from './components/waterfall-controls';
 import { setupThemeToggle } from './components/theme-toggle';
 import { setupSerialPanel } from './components/serial-panel';
 import { setupAudioPanel, resetAudioPanel } from './components/audio-panel';
@@ -19,6 +20,8 @@ import { startFftBridge, listenAudioStatus } from './services/audio-bridge';
 import { startRxBridge } from './services/rx-bridge';
 import { startSerialBridge } from './services/serial-bridge';
 import { appendRxText } from './components/rx-display';
+import { loadConfiguration, saveConfiguration } from './services/backend-api';
+import type { Configuration } from './types';
 
 window.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('waterfall-canvas') as HTMLCanvasElement;
@@ -32,7 +35,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupTxInput();
   setupTxButtons();
   setupRxDisplay();
-  setupWaterfallClick();
+  setupWaterfallClick(waterfall);
   setupThemeToggle();
   setupSerialPanel();
   setupAudioPanel();
@@ -63,4 +66,57 @@ window.addEventListener('DOMContentLoaded', () => {
   startRxBridge(appendRxText).catch((err) => {
     console.error('Failed to start RX bridge:', err);
   });
+
+  // Load config and wire waterfall controls with persistence
+  if (waterfall) {
+    const wf = waterfall;
+    let currentConfig: Configuration | null = null;
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function scheduleConfigSave(): void {
+      if (!currentConfig) return;
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        saveConfiguration(currentConfig!).catch((err) => {
+          console.warn('Failed to save waterfall settings:', err);
+        });
+      }, 500);
+    }
+
+    const applyWaterfallSettings = setupWaterfallControls(wf, (settings: WaterfallSettings) => {
+      if (!currentConfig) {
+        // Build a minimal config to persist into if none was loaded
+        currentConfig = {
+          name: 'Default',
+          audio_input: null,
+          audio_output: null,
+          serial_port: null,
+          baud_rate: 38400,
+          radio_type: 'FT-991A',
+          carrier_freq: 1000.0,
+          waterfall_palette: settings.palette,
+          waterfall_noise_floor: settings.noiseFloor,
+          waterfall_zoom: settings.zoomLevel,
+        };
+      } else {
+        currentConfig.waterfall_palette = settings.palette;
+        currentConfig.waterfall_noise_floor = settings.noiseFloor;
+        currentConfig.waterfall_zoom = settings.zoomLevel;
+      }
+      scheduleConfigSave();
+    });
+
+    loadConfiguration('Default')
+      .then((config) => {
+        currentConfig = config;
+        applyWaterfallSettings(
+          config.waterfall_palette,
+          config.waterfall_noise_floor,
+          config.waterfall_zoom,
+        );
+      })
+      .catch(() => {
+        // No saved config yet — waterfall defaults are already applied
+      });
+  }
 });

@@ -1,20 +1,40 @@
 /** Waterfall spectrum display - canvas-based scrolling spectrogram */
 
-import { buildColorMap } from '../utils/color-map';
+import { buildAllColorMaps, type ColorPalette } from '../utils/color-map';
+
+export type ZoomLevel = 1 | 2 | 4;
+
+export interface WaterfallSettings {
+  palette: ColorPalette;
+  noiseFloor: number;
+  zoomLevel: ZoomLevel;
+}
+
+const AUDIO_START_HZ = 500;
+const AUDIO_END_HZ = 2500;
+const SAMPLE_RATE = 48000;
 
 export class WaterfallDisplay {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private imageData: ImageData | null = null;
   private animationId: number = 0;
-  private colorMap: Uint8ClampedArray[] = [];
+  private allColorMaps = buildAllColorMaps();
+  private colorMap: Uint8ClampedArray[];
   private resizeHandler = () => this.resize();
   private liveMode: boolean = false;
+
+  // Adjustable settings
+  private palette: ColorPalette = 'classic';
+  private noiseFloor: number = -100;
+  private readonly dynamicRange: number = 80;
+  private zoomLevel: ZoomLevel = 1;
+  private carrierFreq: number = 1500;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false })!;
-    this.colorMap = buildColorMap();
+    this.colorMap = this.allColorMaps.classic;
     this.resize();
     window.addEventListener('resize', this.resizeHandler);
   }
@@ -52,21 +72,52 @@ export class WaterfallDisplay {
     this.liveMode = live;
   }
 
-  /**
-   * Draw a single spectrum line from real FFT magnitudes (in dB).
-   * Called by the audio bridge when an fft-data event arrives.
-   *
-   * Maps the FFT bins covering 500-2500 Hz to the canvas width.
-   * dB normalization: (dbValue + 100) / 80 * 255 → 0-255 color index
-   */
-  drawSpectrum(magnitudes: number[]): void {
+  // --- Settings ---
+
+  setPalette(palette: ColorPalette): void {
+    this.palette = palette;
+    this.colorMap = this.allColorMaps[palette];
+  }
+
+  setNoiseFloor(dbValue: number): void {
+    this.noiseFloor = dbValue;
+  }
+
+  setZoom(level: ZoomLevel): void {
+    this.zoomLevel = level;
+  }
+
+  /** Called by click-to-tune so zoom stays centered on the active carrier */
+  setCarrierFreq(freqHz: number): void {
+    this.carrierFreq = freqHz;
+  }
+
+  getSettings(): WaterfallSettings {
+    return {
+      palette: this.palette,
+      noiseFloor: this.noiseFloor,
+      zoomLevel: this.zoomLevel,
+    };
+  }
+
+  /** Returns the currently visible Hz range based on zoom + carrier */
+  getVisibleRange(): { startHz: number; endHz: number } {
+    if (this.zoomLevel === 1) {
+      return { startHz: AUDIO_START_HZ, endHz: AUDIO_END_HZ };
+    }
+    const span = (AUDIO_END_HZ - AUDIO_START_HZ) / this.zoomLevel; // 1000 or 500
+    const half = span / 2;
+    const startHz = Math.max(
+      AUDIO_START_HZ,
+      Math.min(AUDIO_END_HZ - span, this.carrierFreq - half),
+    );
+    return { startHz, endHz: startHz + span };
+  }
+
+  private scrollDown(): void {
     if (!this.imageData) return;
-
-    const width = this.canvas.width;
-    const height = this.canvas.height;
+    const { width, height } = this.canvas;
     const data = this.imageData.data;
-
-    // Scroll existing data down by 1 row
     for (let y = height - 1; y > 0; y--) {
       for (let x = 0; x < width; x++) {
         const srcIdx = ((y - 1) * width + x) * 4;
@@ -76,29 +127,38 @@ export class WaterfallDisplay {
         data[dstIdx + 2] = data[srcIdx + 2];
       }
     }
+  }
 
-    // Map FFT bins to the 500-2500 Hz display range
-    // At 48 kHz sample rate with 4096-point FFT, each bin = 48000/4096 ≈ 11.72 Hz
-    // Bin index for freq f = f * fftSize / sampleRate
-    const sampleRate = 48000;
-    const fftSize = magnitudes.length * 2; // magnitudes is half the FFT size
-    const binWidth = sampleRate / fftSize;
-    const startBin = Math.floor(500 / binWidth);
-    const endBin = Math.ceil(2500 / binWidth);
+  /**
+   * Draw a single spectrum line from real FFT magnitudes (in dB).
+   * Called by the audio bridge when an fft-data event arrives.
+   */
+  drawSpectrum(magnitudes: number[]): void {
+    if (!this.imageData) return;
+
+    this.scrollDown();
+
+    // Map FFT bins to the visible Hz range (zoom + carrier aware)
+    const { width } = this.canvas;
+    const data = this.imageData.data;
+    const fftSize = magnitudes.length * 2;
+    const binWidth = SAMPLE_RATE / fftSize;
+    const { startHz, endHz } = this.getVisibleRange();
+    const startBin = Math.floor(startHz / binWidth);
+    const endBin = Math.ceil(endHz / binWidth);
     const displayBins = endBin - startBin;
 
     // Draw the new top row
     for (let x = 0; x < width; x++) {
-      // Map pixel to FFT bin (linear interpolation)
       const binFloat = startBin + (x / width) * displayBins;
       const binIdx = Math.floor(binFloat);
+      const dbValue = binIdx < magnitudes.length ? magnitudes[binIdx] : this.noiseFloor;
 
-      // Clamp to valid range
-      const dbValue = binIdx < magnitudes.length ? magnitudes[binIdx] : -100;
-
-      // Normalize dB to 0-255 color index
-      // Typical range: -100 dB (silence) to -20 dB (strong signal)
-      const normalized = Math.min(255, Math.max(0, Math.floor(((dbValue + 100) / 80) * 255)));
+      // Normalize dB to 0-255 using adjustable noise floor
+      const normalized = Math.min(
+        255,
+        Math.max(0, Math.floor(((dbValue - this.noiseFloor) / this.dynamicRange) * 255)),
+      );
       const color = this.colorMap[normalized];
 
       const idx = x * 4;
@@ -113,53 +173,37 @@ export class WaterfallDisplay {
   private drawFrame(): void {
     if (!this.imageData) return;
 
-    const width = this.canvas.width;
-    const height = this.canvas.height;
+    this.scrollDown();
+
+    // Generate new top row with simulated spectrum (raw 0-255 magnitudes)
+    const { width } = this.canvas;
     const data = this.imageData.data;
-
-    // Scroll existing data down by 1 row
-    for (let y = height - 1; y > 0; y--) {
-      for (let x = 0; x < width; x++) {
-        const srcIdx = ((y - 1) * width + x) * 4;
-        const dstIdx = (y * width + x) * 4;
-        data[dstIdx] = data[srcIdx];
-        data[dstIdx + 1] = data[srcIdx + 1];
-        data[dstIdx + 2] = data[srcIdx + 2];
-      }
-    }
-
-    // Generate new top row with simulated spectrum
-    const freqRange = 2000;  // 500-2500 Hz displayed
+    const { startHz, endHz } = this.getVisibleRange();
+    const freqRange = endHz - startHz;
     const noiseFloor = 15;
     const time = performance.now() / 1000;
 
     for (let x = 0; x < width; x++) {
-      // Map pixel to frequency
-      const freq = 500 + (x / width) * freqRange;
+      const freq = startHz + (x / width) * freqRange;
 
-      // Base noise
       let magnitude = Math.random() * noiseFloor;
 
-      // Simulated signal at center frequency (1500 Hz) - PSK31 signal
-      const signalCenter = 1500;
-      const signalWidth = 60;
-      const distFromSignal = Math.abs(freq - signalCenter);
-      if (distFromSignal < signalWidth) {
-        const signalStrength = 1 - (distFromSignal / signalWidth);
-        // Add some modulation to simulate PSK
+      // Simulated PSK-31 signal at center frequency (1500 Hz)
+      const distFromSignal = Math.abs(freq - 1500);
+      if (distFromSignal < 60) {
+        const signalStrength = 1 - distFromSignal / 60;
         const modulation = Math.sin(time * 20 + x * 0.1) * 0.3 + 0.7;
         magnitude += signalStrength * 200 * modulation * (Math.random() * 0.3 + 0.7);
       }
 
-      // Add a weaker signal at 1200 Hz
-      const signal2Center = 1200;
-      const dist2 = Math.abs(freq - signal2Center);
+      // Weaker signal at 1200 Hz
+      const dist2 = Math.abs(freq - 1200);
       if (dist2 < 40) {
         const strength = (1 - dist2 / 40) * 100 * (Math.random() * 0.4 + 0.6);
         magnitude += strength * (Math.sin(time * 15) * 0.3 + 0.7);
       }
 
-      // Add occasional burst at 1800 Hz
+      // Occasional burst at 1800 Hz
       if (Math.sin(time * 0.5) > 0.7) {
         const dist3 = Math.abs(freq - 1800);
         if (dist3 < 30) {
@@ -167,7 +211,6 @@ export class WaterfallDisplay {
         }
       }
 
-      // Clamp and map to color
       magnitude = Math.min(255, Math.max(0, magnitude));
       const color = this.colorMap[Math.floor(magnitude)];
 

@@ -16,6 +16,25 @@
         <section class="waterfall-section">
           <div class="waterfall-header">
             <span class="waterfall-label">Waterfall</span>
+            <div class="waterfall-controls">
+              <select id="wf-palette" class="wf-palette-select" title="Color palette">
+                <option value="classic">Classic</option>
+                <option value="heat">Heat</option>
+                <option value="viridis">Viridis</option>
+                <option value="grayscale">Grayscale</option>
+              </select>
+              <div class="wf-zoom-group">
+                <button class="wf-zoom-btn active" data-zoom="1">1×</button>
+                <button class="wf-zoom-btn" data-zoom="2">2×</button>
+                <button class="wf-zoom-btn" data-zoom="4">4×</button>
+              </div>
+              <div class="wf-gain-group">
+                <span class="wf-gain-label">Gain</span>
+                <input type="range" id="wf-gain" class="wf-gain-slider"
+                  min="-120" max="-60" value="-100" step="5">
+                <span id="wf-gain-value" class="wf-gain-value">-100</span>
+              </div>
+            </div>
             <span class="waterfall-freq">1500 Hz</span>
           </div>
           <div class="waterfall-canvas-container">

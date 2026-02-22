@@ -20,6 +20,9 @@ export interface Configuration {
   baud_rate: number;
   radio_type: string;
   carrier_freq: number;
+  waterfall_palette: string;
+  waterfall_noise_floor: number;
+  waterfall_zoom: number;
 }
 
 export interface RadioInfo {

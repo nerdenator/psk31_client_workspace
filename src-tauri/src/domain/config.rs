@@ -5,6 +5,18 @@
 
 use serde::{Deserialize, Serialize};
 
+fn default_waterfall_palette() -> String {
+    "classic".to_string()
+}
+
+fn default_waterfall_noise_floor() -> i32 {
+    -100
+}
+
+fn default_waterfall_zoom() -> u32 {
+    1
+}
+
 /// A saved configuration profile
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Configuration {
@@ -22,6 +34,15 @@ pub struct Configuration {
     pub radio_type: String,
     /// Audio carrier frequency in Hz
     pub carrier_freq: f64,
+    /// Waterfall color palette name ("classic", "heat", "viridis", "grayscale")
+    #[serde(default = "default_waterfall_palette")]
+    pub waterfall_palette: String,
+    /// Waterfall noise floor in dBFS (e.g. -100)
+    #[serde(default = "default_waterfall_noise_floor")]
+    pub waterfall_noise_floor: i32,
+    /// Waterfall zoom level (1, 2, or 4)
+    #[serde(default = "default_waterfall_zoom")]
+    pub waterfall_zoom: u32,
 }
 
 impl Default for Configuration {
@@ -34,6 +55,9 @@ impl Default for Configuration {
             baud_rate: 38400,
             radio_type: "FT-991A".to_string(),
             carrier_freq: 1000.0,
+            waterfall_palette: default_waterfall_palette(),
+            waterfall_noise_floor: default_waterfall_noise_floor(),
+            waterfall_zoom: default_waterfall_zoom(),
         }
     }
 }

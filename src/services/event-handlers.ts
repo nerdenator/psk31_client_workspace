@@ -2,6 +2,7 @@
 
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { setTheme } from '../components/theme-toggle';
+import { openSettingsDialog } from '../components/settings-dialog';
 import type { MenuEvent } from '../types';
 
 let unlisten: UnlistenFn | null = null;
@@ -19,19 +20,19 @@ export async function setupMenuEvents(): Promise<void> {
 
     switch (id) {
       case 'settings':
-        alert('Settings dialog coming soon');
+        openSettingsDialog('general');
         break;
 
       case 'config_default':
-        console.log('Switched to Default configuration');
+        openSettingsDialog('general');
         break;
 
       case 'config_save':
-        alert('Save Configuration coming soon');
+        openSettingsDialog('general');
         break;
 
       case 'config_delete':
-        alert('Delete Configuration coming soon');
+        openSettingsDialog('general');
         break;
 
       case 'theme_light':
@@ -43,7 +44,7 @@ export async function setupMenuEvents(): Promise<void> {
         break;
 
       case 'waterfall_colors':
-        alert('Waterfall Colors coming soon');
+        openSettingsDialog('general');
         break;
 
       case 'zoom_in':

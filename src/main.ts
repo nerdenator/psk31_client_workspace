@@ -12,7 +12,7 @@ import { setupTxButtons } from './components/control-panel';
 import { setupWaterfallClick, setupWaterfallControls } from './components/waterfall-controls';
 import { setupThemeToggle } from './components/theme-toggle';
 import { setupSerialPanel } from './components/serial-panel';
-import { setupAudioPanel, resetAudioPanel } from './components/audio-panel';
+import { setupAudioPanel, resetAudioPanel, setSelectedAudioDevices } from './components/audio-panel';
 import { setupStatusBar } from './components/status-bar';
 import { showToast } from './components/toast';
 import { setupMenuEvents } from './services/event-handlers';
@@ -21,6 +21,7 @@ import { startRxBridge } from './services/rx-bridge';
 import { startSerialBridge } from './services/serial-bridge';
 import { appendRxText } from './components/rx-display';
 import { loadConfiguration, saveConfiguration } from './services/backend-api';
+import { setupSettingsDialog } from './components/settings-dialog';
 import type { Configuration } from './types';
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -67,25 +68,27 @@ window.addEventListener('DOMContentLoaded', () => {
     console.error('Failed to start RX bridge:', err);
   });
 
-  // Load config and wire waterfall controls with persistence
+  // ── Shared config state ───────────────────────────────────────────────────
+  let currentConfig: Configuration | null = null;
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleConfigSave(): void {
+    if (!currentConfig) return;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveConfiguration(currentConfig!).catch((err) => {
+        console.warn('Failed to save config:', err);
+      });
+    }, 500);
+  }
+
+  // ── Waterfall controls + persistence ──────────────────────────────────────
+  let applyWaterfallSettings: ((p: string, f: number, z: number) => void) | null = null;
+
   if (waterfall) {
     const wf = waterfall;
-    let currentConfig: Configuration | null = null;
-    let saveTimer: ReturnType<typeof setTimeout> | null = null;
-
-    function scheduleConfigSave(): void {
-      if (!currentConfig) return;
-      if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        saveConfiguration(currentConfig!).catch((err) => {
-          console.warn('Failed to save waterfall settings:', err);
-        });
-      }, 500);
-    }
-
-    const applyWaterfallSettings = setupWaterfallControls(wf, (settings: WaterfallSettings) => {
+    applyWaterfallSettings = setupWaterfallControls(wf, (settings: WaterfallSettings) => {
       if (!currentConfig) {
-        // Build a minimal config to persist into if none was loaded
         currentConfig = {
           name: 'Default',
           audio_input: null,
@@ -105,18 +108,35 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       scheduleConfigSave();
     });
-
-    loadConfiguration('Default')
-      .then((config) => {
-        currentConfig = config;
-        applyWaterfallSettings(
-          config.waterfall_palette,
-          config.waterfall_noise_floor,
-          config.waterfall_zoom,
-        );
-      })
-      .catch(() => {
-        // No saved config yet — waterfall defaults are already applied
-      });
   }
+
+  // ── Settings dialog ───────────────────────────────────────────────────────
+  setupSettingsDialog({
+    getCurrentConfig: () => currentConfig,
+    onSave: async (config) => {
+      await saveConfiguration(config);
+      currentConfig = config;
+      applyWaterfallSettings?.(
+        config.waterfall_palette,
+        config.waterfall_noise_floor,
+        config.waterfall_zoom,
+      );
+      setSelectedAudioDevices(config.audio_input, config.audio_output);
+      showToast('Settings saved', 'info');
+    },
+  });
+
+  // ── Load default config on startup ────────────────────────────────────────
+  loadConfiguration('Default')
+    .then((config) => {
+      currentConfig = config;
+      applyWaterfallSettings?.(
+        config.waterfall_palette,
+        config.waterfall_noise_floor,
+        config.waterfall_zoom,
+      );
+    })
+    .catch(() => {
+      // No saved config yet — defaults already applied
+    });
 });

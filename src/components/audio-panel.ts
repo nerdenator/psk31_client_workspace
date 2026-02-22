@@ -4,10 +4,16 @@ import { listAudioDevices, startAudioStream, stopAudioStream } from '../services
 import { setAudioState } from '../services/app-state';
 
 let _resetAudio: (() => void) | null = null;
+let _setSelected: ((inputId: string | null, outputId: string | null) => void) | null = null;
 
 /** Reset the audio panel to stopped state (e.g. on backend-initiated device loss) */
 export function resetAudioPanel(): void {
   _resetAudio?.();
+}
+
+/** Update the sidebar audio dropdown selections without triggering a stream restart */
+export function setSelectedAudioDevices(inputId: string | null, outputId: string | null): void {
+  _setSelected?.(inputId, outputId);
 }
 
 export function setupAudioPanel(): void {
@@ -85,6 +91,10 @@ export function setupAudioPanel(): void {
   });
 
   _resetAudio = resetAudio;
+  _setSelected = (inputId, outputId) => {
+    if (inputId !== null) inputDropdown.value = inputId;
+    if (outputId !== null && outputDropdown) outputDropdown.value = outputId;
+  };
 }
 
 /** Fetch audio devices from backend and populate both dropdowns */

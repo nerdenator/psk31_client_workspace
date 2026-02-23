@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockInvoke } from './helpers';
 
 /**
  * Phase 5 E2E tests for RX (receive) subsystem.
@@ -6,29 +7,6 @@ import { test, expect } from '@playwright/test';
  * Tests the RX display, decoded text rendering, click-to-tune carrier
  * frequency updates, and the rx-text event bridge.
  */
-
-/** Mock window.__TAURI_INTERNALS__.invoke to intercept backend calls */
-function mockInvoke(
-  page: import('@playwright/test').Page,
-  handlers: Record<string, unknown>
-) {
-  return page.addInitScript((h) => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: (cmd: string, args?: any) => {
-        if (cmd in h) {
-          const value = h[cmd];
-          if (typeof value === 'function') {
-            return Promise.resolve((value as any)(args));
-          }
-          return Promise.resolve(value);
-        }
-        return Promise.resolve(null);
-      },
-      metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
-      convertFileSrc: (src: string) => src,
-    };
-  }, handlers);
-}
 
 test.describe('RX Display', () => {
   test('RX panel shows decoded text when injected', async ({ page }) => {

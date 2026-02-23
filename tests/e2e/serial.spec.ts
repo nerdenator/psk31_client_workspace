@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockInvoke } from './helpers';
 
 /**
  * Phase 2 E2E tests for serial/CAT communication.
@@ -6,31 +7,6 @@ import { test, expect } from '@playwright/test';
  * These tests mock the Tauri `invoke()` function inline to simulate
  * backend responses without a real serial connection.
  */
-
-/** Mock window.__TAURI_INTERNALS__.invoke to intercept backend calls */
-function mockInvoke(
-  page: import('@playwright/test').Page,
-  handlers: Record<string, unknown>
-) {
-  return page.addInitScript((h) => {
-    // Tauri 2.x uses window.__TAURI_INTERNALS__.invoke
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: (cmd: string, args?: any) => {
-        if (cmd in h) {
-          const value = h[cmd];
-          if (typeof value === 'function') {
-            return Promise.resolve((value as any)(args));
-          }
-          return Promise.resolve(value);
-        }
-        // Default: return empty/null for unmocked commands
-        return Promise.resolve(null);
-      },
-      metadata: { currentWebview: { label: 'main' }, currentWindow: { label: 'main' } },
-      convertFileSrc: (src: string) => src,
-    };
-  }, handlers);
-}
 
 test.describe('Serial Panel', () => {
   test('serial port dropdown populates from backend', async ({ page }) => {

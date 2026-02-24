@@ -451,6 +451,17 @@ Each phase includes implementation, unit tests, and E2E tests. Tests are written
 
 ---
 
+### Phase 7: UI Polish
+**Implementation:**
+- Session A: Status bar cleanup (remove signal bars, Mode/Rate labels), waterfall black on init, clear RX placeholder
+- Session B: Band selector + per-band frequency input (replace static frequency display)
+
+**Status:**
+- [x] Session A: Status bar cleanup + waterfall black + clear RX placeholder
+- [ ] Session B: Band selector + per-band frequency input
+
+---
+
 ## Testing Strategy
 
 Tests are written alongside code in each phase, not as an afterthought. Hexagonal architecture enables thorough testing of the **core domain** (dsp/, modem/) without any hardware or I/O dependencies.

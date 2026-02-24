@@ -46,6 +46,7 @@ export class WaterfallDisplay {
     for (let i = 3; i < this.imageData.data.length; i += 4) {
       this.imageData.data[i] = 255;
     }
+    this.ctx.putImageData(this.imageData, 0, 0);
   }
 
   start(): void {

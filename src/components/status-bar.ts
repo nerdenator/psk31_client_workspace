@@ -1,22 +1,12 @@
-/** Status bar — drives connection indicators and signal level meter.
+/** Status bar — drives connection indicators.
  *
  * Subscribes to app-state for serial/audio connection changes.
- * Listens to the 'signal-level' Tauri event for the 5-bar signal meter.
  * Calls hydrateFromBackend() on init so state is correct after a reload.
  */
 
-import { listen } from '@tauri-apps/api/event';
 import { onSerialChanged, onAudioChanged, hydrateFromBackend } from '../services/app-state';
 
-interface SignalLevelPayload {
-  level: number;
-}
-
 export async function setupStatusBar(): Promise<void> {
-  const signalBars = Array.from(
-    document.querySelectorAll('.signal-bars .signal-bar'),
-  ) as HTMLElement[];
-
   const serialDot = document.querySelector('#statusbar-serial .status-dot') as HTMLElement | null;
   const serialText = document.querySelector(
     '#statusbar-serial .status-text',
@@ -48,30 +38,12 @@ export async function setupStatusBar(): Promise<void> {
     }
   }
 
-  function updateSignalBars(level: number): void {
-    const activeBars = Math.round(level * signalBars.length);
-    signalBars.forEach((bar, i) => {
-      bar.classList.toggle('active', i < activeBars);
-    });
-  }
-
   // Subscribe to connection state changes
   onSerialChanged(updateSerialIndicator);
-  onAudioChanged((streaming, deviceName) => {
-    updateAudioIndicator(streaming, deviceName);
-    // Clear signal bars when audio stops
-    if (!streaming) updateSignalBars(0);
-  });
+  onAudioChanged(updateAudioIndicator);
 
   // Seed state from Rust — makes status bar correct after a webview reload
   await hydrateFromBackend();
-
-  // Listen for signal level events from the audio thread
-  const unlisten = await listen<SignalLevelPayload>('signal-level', (event) => {
-    updateSignalBars(event.payload.level);
-  });
-
-  window.addEventListener('beforeunload', () => void unlisten());
 }
 
 function truncate(s: string, maxLen: number): string {

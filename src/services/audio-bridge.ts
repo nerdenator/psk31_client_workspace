@@ -20,9 +20,8 @@ export async function startFftBridge(waterfall: WaterfallDisplay): Promise<void>
   });
 }
 
-/** Listen for audio status changes and toggle waterfall live mode */
+/** Listen for audio status changes */
 export async function listenAudioStatus(
-  waterfall: WaterfallDisplay,
   onStatus?: (status: string) => void,
 ): Promise<void> {
   if (statusUnlisten) {
@@ -31,9 +30,7 @@ export async function listenAudioStatus(
   }
 
   statusUnlisten = await listen<{ status: string }>('audio-status', (event) => {
-    const status = event.payload.status;
-    waterfall.setLiveMode(status === 'running');
-    onStatus?.(status);
+    onStatus?.(event.payload.status);
   });
 }
 

@@ -18,11 +18,9 @@ export class WaterfallDisplay {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private imageData: ImageData | null = null;
-  private animationId: number = 0;
   private allColorMaps = buildAllColorMaps();
   private colorMap: Uint8ClampedArray[];
   private resizeHandler = () => this.resize();
-  private liveMode: boolean = false;
 
   // Adjustable settings
   private palette: ColorPalette = 'classic';
@@ -51,25 +49,11 @@ export class WaterfallDisplay {
   }
 
   start(): void {
-    const animate = () => {
-      if (!this.liveMode) {
-        this.drawFrame();
-      }
-      this.animationId = requestAnimationFrame(animate);
-    };
-    animate();
+    window.addEventListener('resize', this.resizeHandler);
   }
 
   stop(): void {
-    if (this.animationId) {
-      cancelAnimationFrame(this.animationId);
-    }
     window.removeEventListener('resize', this.resizeHandler);
-  }
-
-  /** Switch between simulated and live FFT data */
-  setLiveMode(live: boolean): void {
-    this.liveMode = live;
   }
 
   // --- Settings ---
@@ -170,56 +154,4 @@ export class WaterfallDisplay {
     this.ctx.putImageData(this.imageData, 0, 0);
   }
 
-  private drawFrame(): void {
-    if (!this.imageData) return;
-
-    this.scrollDown();
-
-    // Generate new top row with simulated spectrum (raw 0-255 magnitudes)
-    const { width } = this.canvas;
-    const data = this.imageData.data;
-    const { startHz, endHz } = this.getVisibleRange();
-    const freqRange = endHz - startHz;
-    const noiseFloor = 15;
-    const time = performance.now() / 1000;
-
-    for (let x = 0; x < width; x++) {
-      const freq = startHz + (x / width) * freqRange;
-
-      let magnitude = Math.random() * noiseFloor;
-
-      // Simulated PSK-31 signal at center frequency (1500 Hz)
-      const distFromSignal = Math.abs(freq - 1500);
-      if (distFromSignal < 60) {
-        const signalStrength = 1 - distFromSignal / 60;
-        const modulation = Math.sin(time * 20 + x * 0.1) * 0.3 + 0.7;
-        magnitude += signalStrength * 200 * modulation * (Math.random() * 0.3 + 0.7);
-      }
-
-      // Weaker signal at 1200 Hz
-      const dist2 = Math.abs(freq - 1200);
-      if (dist2 < 40) {
-        const strength = (1 - dist2 / 40) * 100 * (Math.random() * 0.4 + 0.6);
-        magnitude += strength * (Math.sin(time * 15) * 0.3 + 0.7);
-      }
-
-      // Occasional burst at 1800 Hz
-      if (Math.sin(time * 0.5) > 0.7) {
-        const dist3 = Math.abs(freq - 1800);
-        if (dist3 < 30) {
-          magnitude += (1 - dist3 / 30) * 80;
-        }
-      }
-
-      magnitude = Math.min(255, Math.max(0, magnitude));
-      const color = this.colorMap[Math.floor(magnitude)];
-
-      const idx = x * 4;
-      data[idx] = color[0];
-      data[idx + 1] = color[1];
-      data[idx + 2] = color[2];
-    }
-
-    this.ctx.putImageData(this.imageData, 0, 0);
-  }
 }

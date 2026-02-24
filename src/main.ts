@@ -50,7 +50,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Wire up audio bridge: FFT events → waterfall; error status → toast + reset UI
   if (waterfall) {
     startFftBridge(waterfall);
-    listenAudioStatus(waterfall, (status) => {
+    listenAudioStatus((status) => {
       if (status.startsWith('error:')) {
         resetAudioPanel();
         showToast('Audio device lost', 'error');

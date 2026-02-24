@@ -458,7 +458,7 @@ Each phase includes implementation, unit tests, and E2E tests. Tests are written
 
 **Status:**
 - [x] Session A: Status bar cleanup + waterfall black + clear RX placeholder
-- [ ] Session B: Band selector + per-band frequency input
+- [x] Session B: Band selector + per-band frequency input
 
 ---
 

@@ -690,6 +690,61 @@ html, body {
   color: var(--text-secondary);
 }
 
+/* Band / frequency control */
+.band-freq-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+}
+
+.freq-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+.freq-mhz-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--gap-sm);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--accent-freq);
+  text-shadow: var(--glow-freq);
+  background: var(--bg-elevated);
+  border: var(--border-subtle);
+  outline: none;
+}
+
+.freq-mhz-input:focus {
+  border-color: var(--accent-freq);
+}
+
+.freq-mhz-input:disabled {
+  color: var(--text-dim);
+  text-shadow: none;
+  cursor: default;
+}
+
+/* Hide browser spinners on number input */
+.freq-mhz-input::-webkit-outer-spin-button,
+.freq-mhz-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.freq-mhz-input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.freq-range-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-dim);
+  min-height: 12px;
+}
+
 /* PTT Indicator */
 .ptt-container {
   display: flex;

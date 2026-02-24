@@ -94,10 +94,17 @@
         <!-- Frequency -->
         <div class="sidebar-section">
           <div class="section-label">Frequency</div>
-          <div class="frequency-display">
-            <div class="frequency-value">14.070.000</div>
-            <div class="frequency-unit">MHz</div>
-            <span class="frequency-mode">DATA-USB</span>
+          <div class="band-freq-control">
+            <select id="band-select" class="device-select" disabled>
+              <option value="">— no radio —</option>
+            </select>
+            <div class="freq-input-row">
+              <input type="number" id="freq-mhz-input" class="freq-mhz-input"
+                disabled step="0.001" min="1.8" max="30" />
+              <span class="frequency-unit">MHz</span>
+            </div>
+            <div id="freq-range-hint" class="freq-range-hint"></div>
+            <span class="frequency-mode" id="frequency-mode">—</span>
           </div>
         </div>
 

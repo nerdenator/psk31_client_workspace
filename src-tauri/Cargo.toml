@@ -1,13 +1,13 @@
 [package]
-name = "psk31-client"
+name = "baudacious"
 version = "0.1.0"
-description = "PSK-31 Desktop Client for Ham Radio"
-authors = ["you"]
+description = "PSK-31 ham radio keyboard-to-keyboard communication"
+authors = ["nerdenator industries"]
 edition = "2021"
 license = "MIT"
 
 [lib]
-name = "psk31_client_lib"
+name = "baudacious_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

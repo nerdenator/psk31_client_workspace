@@ -462,6 +462,47 @@ Each phase includes implementation, unit tests, and E2E tests. Tests are written
 
 ---
 
+### Phase 8: Integration Testing
+
+**Goal**: Automated integration tests covering the full command flow from frontend
+invoke → Rust command handler → radio adapter, using `MockRadio` as the
+driven adapter. No hardware required. These complement the existing unit tests
+(pure DSP/modem logic) and E2E tests (UI behavior with mocked invoke).
+
+**What's missing today**:
+- No tests exercise the Tauri command handlers themselves (`commands/serial.rs`,
+  `commands/radio.rs`, `commands/audio.rs`) — the layer that wires `AppState`
+  to adapters
+- No tests verify that a sequence of commands leaves `AppState` in the right
+  state (e.g. connect → set frequency → disconnect)
+- The camelCase IPC arg bug (`baud_rate` vs `baudRate`) went undetected until
+  runtime; a command-layer test would have caught it
+
+**Tests to add** (`src-tauri/tests/cat_integration.rs`):
+
+| Test | Verifies |
+|------|----------|
+| `connect_stores_radio_in_state` | `AppState.radio` is `Some` after connect, `None` after disconnect |
+| `connect_returns_correct_radio_info` | `RadioInfo` frequency/mode matches mock defaults |
+| `set_frequency_updates_mock_state` | `get_frequency` after `set_frequency` returns new value |
+| `set_frequency_rejects_non_amateur` | Out-of-band Hz → `Err`, radio still connected |
+| `ptt_on_off_round_trip` | `is_transmitting` true after `ptt_on`, false after `ptt_off` |
+| `set_mode_round_trip` | `get_mode` after `set_mode("USB")` returns `"USB"` |
+| `disconnect_releases_radio` | `AppState.radio` is `None`, subsequent radio command returns `Err` |
+| `band_change_sends_correct_frequency` | 40m band select → `set_frequency(7_035_000)` |
+
+**Implementation approach**:
+- Tests call command functions directly (not via Tauri IPC) with a fabricated
+  `AppState` pre-loaded with `MockRadio`
+- `MockRadio` already exists in `adapters/mock_radio.rs`; tests instantiate it
+  directly without needing `MOCK_RADIO` env var
+- No Tauri runtime needed — pure Rust, runs with `cargo test`
+
+**Status:**
+- [ ] `src-tauri/tests/cat_integration.rs` — command-layer integration tests
+
+---
+
 ## Testing Strategy
 
 Tests are written alongside code in each phase, not as an afterthought. Hexagonal architecture enables thorough testing of the **core domain** (dsp/, modem/) without any hardware or I/O dependencies.

@@ -51,9 +51,9 @@ test.describe('Serial Panel', () => {
     const connectBtn = page.locator('#serial-connect-btn');
     await connectBtn.click();
 
-    // Frequency should update
-    const freqValue = page.locator('.sidebar .frequency-value').first();
-    await expect(freqValue).toHaveText('14.070.000');
+    // Frequency and band should update
+    await expect(page.locator('#freq-mhz-input')).toHaveValue('14.070');
+    await expect(page.locator('#band-select')).toHaveValue('20m');
 
     // Mode should update
     const freqMode = page.locator('.frequency-mode');

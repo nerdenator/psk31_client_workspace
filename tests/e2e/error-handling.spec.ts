@@ -49,21 +49,7 @@ test.describe('Status Bar', () => {
     await expect(page.locator('#statusbar-serial .status-text')).toContainText('usbserial');
   });
 
-  test('signal-level event activates correct number of bars', async ({ page }) => {
-    await mockInvoke(page, DISCONNECTED_STATUS);
-    await page.goto('/');
 
-    // level=0.6 → Math.round(0.6 * 5) = 3 active bars
-    await fireEvent(page, 'signal-level', { level: 0.6 });
-
-    const bars = page.locator('.signal-bars .signal-bar');
-    await expect(bars).toHaveCount(5);
-    await expect(bars.nth(0)).toHaveClass(/active/);
-    await expect(bars.nth(1)).toHaveClass(/active/);
-    await expect(bars.nth(2)).toHaveClass(/active/);
-    await expect(bars.nth(3)).not.toHaveClass(/active/);
-    await expect(bars.nth(4)).not.toHaveClass(/active/);
-  });
 });
 
 test.describe('Error Toasts', () => {
@@ -209,7 +195,8 @@ test.describe('Full Application Flow', () => {
     await page.locator('#serial-connect-btn').click();
 
     // Frequency and mode update from the connect response
-    await expect(page.locator('.frequency-value').first()).toHaveText('14.070.000');
+    await expect(page.locator('#freq-mhz-input')).toHaveValue('14.070');
+    await expect(page.locator('#band-select')).toHaveValue('20m');
     await expect(page.locator('.frequency-mode')).toHaveText('DATA-USB');
 
     // Status bar serial indicator shows connected

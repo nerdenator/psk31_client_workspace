@@ -1,6 +1,7 @@
 //! Serial port commands — list, connect, disconnect
 
 use crate::adapters::ft991a::Ft991aRadio;
+use crate::adapters::mock_radio::MockRadio;
 use crate::adapters::serial_port::SerialPortFactory;
 use crate::domain::{RadioInfo, SerialPortInfo};
 use crate::ports::{RadioControl, SerialFactory};
@@ -9,6 +10,12 @@ use tauri::State;
 
 #[tauri::command]
 pub fn list_serial_ports() -> Result<Vec<SerialPortInfo>, String> {
+    if std::env::var("MOCK_RADIO").is_ok() {
+        return Ok(vec![SerialPortInfo {
+            name: "mock".to_string(),
+            port_type: "Mock Radio".to_string(),
+        }]);
+    }
     SerialPortFactory::list_ports().map_err(|e| e.to_string())
 }
 
@@ -18,14 +25,18 @@ pub fn connect_serial(
     port: String,
     baud_rate: u32,
 ) -> Result<RadioInfo, String> {
-    // Open serial connection
-    let connection =
-        SerialPortFactory::open(&port, baud_rate).map_err(|e| e.to_string())?;
+    let mock_mode = std::env::var("MOCK_RADIO").is_ok();
 
-    // Create FT-991A radio adapter (owns the serial connection)
-    let mut radio = Ft991aRadio::new(connection);
+    let (mut radio, display_port): (Box<dyn RadioControl>, String) = if mock_mode {
+        log::info!("[MOCK RADIO] MOCK_RADIO=1: skipping serial, using mock adapter");
+        (Box::new(MockRadio::new()), "mock".to_string())
+    } else {
+        // Open real serial connection and wrap in FT-991A adapter
+        let connection = SerialPortFactory::open(&port, baud_rate).map_err(|e| e.to_string())?;
+        (Box::new(Ft991aRadio::new(connection)), port.clone())
+    };
 
-    // Auto-detect: read current frequency and mode from the radio
+    // Auto-detect: read current frequency and mode from the radio (or mock)
     let frequency_hz = radio
         .get_frequency()
         .map_err(|e| e.to_string())?
@@ -33,7 +44,7 @@ pub fn connect_serial(
     let mode = radio.get_mode().map_err(|e| e.to_string())?;
 
     let info = RadioInfo {
-        port: port.clone(),
+        port: display_port.clone(),
         baud_rate,
         frequency_hz,
         mode,
@@ -42,9 +53,9 @@ pub fn connect_serial(
 
     // Store radio and port name in app state
     let mut radio_slot = state.radio.lock().map_err(|_| "Radio state corrupted".to_string())?;
-    *radio_slot = Some(Box::new(radio));
+    *radio_slot = Some(radio);
     *state.serial_port_name.lock().map_err(|_| "Serial port state corrupted".to_string())? =
-        Some(port.clone());
+        Some(display_port);
 
     Ok(info)
 }

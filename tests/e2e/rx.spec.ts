@@ -108,8 +108,8 @@ test.describe('Click-to-Tune', () => {
     });
 
     expect(calls.length).toBe(1);
-    expect(calls[0].args.freq_hz).toBeGreaterThan(500);
-    expect(calls[0].args.freq_hz).toBeLessThanOrEqual(2500);
+    expect(calls[0].args.freqHz).toBeGreaterThan(500);
+    expect(calls[0].args.freqHz).toBeLessThanOrEqual(2500);
   });
 
   test('clicking waterfall updates frequency displays', async ({ page }) => {

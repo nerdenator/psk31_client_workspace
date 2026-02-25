@@ -9,7 +9,7 @@ export async function listAudioDevices(): Promise<AudioDeviceInfo[]> {
 }
 
 export async function startAudioStream(deviceId: string): Promise<void> {
-  return invoke('start_audio_stream', { device_id: deviceId });
+  return invoke('start_audio_stream', { deviceId });
 }
 
 export async function stopAudioStream(): Promise<void> {
@@ -26,12 +26,12 @@ export async function stopRx(): Promise<void> {
 }
 
 export async function setCarrierFrequency(freqHz: number): Promise<void> {
-  return invoke('set_carrier_frequency', { freq_hz: freqHz });
+  return invoke('set_carrier_frequency', { freqHz });
 }
 
 // TX commands
 export async function startTx(text: string, deviceId: string): Promise<void> {
-  return invoke('start_tx', { text, device_id: deviceId });
+  return invoke('start_tx', { text, deviceId });
 }
 
 export async function stopTx(): Promise<void> {
@@ -44,7 +44,7 @@ export async function listSerialPorts(): Promise<SerialPortInfo[]> {
 }
 
 export async function connectSerial(port: string, baudRate: number): Promise<RadioInfo> {
-  return invoke('connect_serial', { port, baud_rate: baudRate });
+  return invoke('connect_serial', { port, baudRate });
 }
 
 export async function disconnectSerial(): Promise<void> {
@@ -65,7 +65,7 @@ export async function getFrequency(): Promise<number> {
 }
 
 export async function setFrequency(freqHz: number): Promise<void> {
-  return invoke('set_frequency', { freq_hz: freqHz });
+  return invoke('set_frequency', { freqHz });
 }
 
 export async function getMode(): Promise<string> {

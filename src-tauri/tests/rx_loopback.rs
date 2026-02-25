@@ -4,8 +4,8 @@
 //! encoder, then feeding those audio samples through the decoder and
 //! checking that the original text is recovered.
 
-use psk31_client_lib::modem::decoder::Psk31Decoder;
-use psk31_client_lib::modem::encoder::Psk31Encoder;
+use baudacious_lib::modem::decoder::Psk31Decoder;
+use baudacious_lib::modem::encoder::Psk31Encoder;
 
 /// Helper: encode text, decode it, return the decoded string
 fn loopback(text: &str, carrier_freq: f64, sample_rate: u32) -> String {

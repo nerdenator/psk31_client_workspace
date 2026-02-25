@@ -88,6 +88,8 @@ impl Ft991aRadio {
     fn send_command(&mut self, cmd: &str) -> Psk31Result<String> {
         self.ensure_command_delay();
 
+        log::debug!("CAT TX: {cmd}");
+
         // Write the command
         self.serial
             .write(cmd.as_bytes())
@@ -134,6 +136,8 @@ impl Ft991aRadio {
         // Strip command echo if present (some radios echo the sent command back)
         // e.g. sending "FA;" may return "FA;FA00014070000;" — we want just the response.
         let response = response.strip_prefix(cmd).unwrap_or(response);
+
+        log::debug!("CAT RX: {response}");
 
         Ok(response.to_string())
     }
@@ -226,6 +230,11 @@ impl RadioControl for Ft991aRadio {
 
     fn set_frequency(&mut self, freq: Frequency) -> Psk31Result<()> {
         let hz = freq.as_hz() as u64;
+        if !is_amateur_frequency(hz) {
+            return Err(Psk31Error::Cat(format!(
+                "Frequency {hz} Hz is outside US amateur bands"
+            )));
+        }
         let cmd = format!("FA{hz:011};");
         self.send_command(&cmd)?;
         Ok(())
@@ -267,6 +276,120 @@ impl Drop for Ft991aRadio {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+
+    // ---------------------------------------------------------------------------
+    // MockSerial: captures sent bytes; returns a single preconfigured response.
+    // The Arc<Mutex<>> log lets the test retain a handle after Ft991aRadio takes
+    // ownership of the Box<dyn SerialConnection>.
+    // ---------------------------------------------------------------------------
+
+    struct MockSerial {
+        log: Arc<Mutex<Vec<String>>>,
+        response: String,
+    }
+
+    impl SerialConnection for MockSerial {
+        fn write(&mut self, data: &[u8]) -> Psk31Result<usize> {
+            self.log
+                .lock()
+                .unwrap()
+                .push(String::from_utf8_lossy(data).into());
+            Ok(data.len())
+        }
+        fn read(&mut self, buf: &mut [u8]) -> Psk31Result<usize> {
+            let bytes = self.response.as_bytes();
+            let n = bytes.len().min(buf.len());
+            buf[..n].copy_from_slice(&bytes[..n]);
+            Ok(n)
+        }
+        fn close(&mut self) -> Psk31Result<()> {
+            Ok(())
+        }
+        fn is_connected(&self) -> bool {
+            true
+        }
+    }
+
+    fn make_radio(response: &str) -> (Ft991aRadio, Arc<Mutex<Vec<String>>>) {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let mock = MockSerial {
+            log: Arc::clone(&log),
+            response: response.to_string(),
+        };
+        (Ft991aRadio::new(Box::new(mock)), log)
+    }
+
+    // ---------------------------------------------------------------------------
+    // Command-generation tests
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn ptt_on_sends_tx1() {
+        let (mut radio, log) = make_radio(";");
+        radio.ptt_on().unwrap();
+        assert_eq!(log.lock().unwrap()[0], "TX1;");
+    }
+
+    #[test]
+    fn ptt_off_sends_tx0() {
+        let (mut radio, log) = make_radio(";");
+        // Start in transmitting state so ptt_off is meaningful
+        radio.is_transmitting = true;
+        radio.ptt_off().unwrap();
+        assert_eq!(log.lock().unwrap()[0], "TX0;");
+    }
+
+    #[test]
+    fn set_frequency_sends_correct_cat() {
+        let (mut radio, log) = make_radio(";");
+        radio
+            .set_frequency(Frequency::hz(14_070_000.0))
+            .unwrap();
+        assert_eq!(log.lock().unwrap()[0], "FA00014070000;");
+    }
+
+    #[test]
+    fn set_frequency_40m_psk31() {
+        let (mut radio, log) = make_radio(";");
+        radio
+            .set_frequency(Frequency::hz(7_035_000.0))
+            .unwrap();
+        assert_eq!(log.lock().unwrap()[0], "FA00007035000;");
+    }
+
+    #[test]
+    fn get_frequency_sends_fa_query() {
+        let (mut radio, log) = make_radio("FA00014070000;");
+        radio.get_frequency().unwrap();
+        assert_eq!(log.lock().unwrap()[0], "FA;");
+    }
+
+    #[test]
+    fn set_mode_data_usb_sends_md0c() {
+        let (mut radio, log) = make_radio(";");
+        radio.set_mode("DATA-USB").unwrap();
+        assert_eq!(log.lock().unwrap()[0], "MD0C;");
+    }
+
+    #[test]
+    fn get_mode_sends_md0_query() {
+        let (mut radio, log) = make_radio("MD0C;");
+        radio.get_mode().unwrap();
+        assert_eq!(log.lock().unwrap()[0], "MD0;");
+    }
+
+    #[test]
+    fn set_frequency_rejects_non_amateur_before_sending() {
+        let (mut radio, log) = make_radio(";");
+        // 10 MHz is between 30m and 20m bands — not an amateur allocation
+        let result = radio.set_frequency(Frequency::hz(10_000_000.0));
+        assert!(result.is_err(), "expected error for out-of-band frequency");
+        assert!(
+            log.lock().unwrap().is_empty(),
+            "no bytes should reach the wire for out-of-band frequency"
+        );
+    }
 
     #[test]
     fn parse_frequency_valid() {

@@ -499,7 +499,7 @@ driven adapter. No hardware required. These complement the existing unit tests
 - No Tauri runtime needed — pure Rust, runs with `cargo test`
 
 **Status:**
-- [ ] `src-tauri/tests/cat_integration.rs` — command-layer integration tests
+- [x] `src-tauri/tests/cat_integration.rs` — 10 integration tests passing
 
 ---
 

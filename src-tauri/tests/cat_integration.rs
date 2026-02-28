@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 
 use baudacious_lib::adapters::ft991a::Ft991aRadio;
 use baudacious_lib::adapters::mock_radio::MockRadio;
+use baudacious_lib::commands::tx::data_mode_for_frequency;
 use baudacious_lib::domain::{Frequency, Psk31Result};
 use baudacious_lib::ports::{RadioControl, SerialConnection};
 use baudacious_lib::state::AppState;
@@ -189,6 +190,80 @@ fn band_change_40m_sends_psk31_calling_frequency() {
     // This matches BAND_PLAN[40m].psk31Hz in serial-panel.ts
     radio.set_frequency(Frequency::hz(7_035_000.0)).unwrap();
     assert_eq!(log.lock().unwrap()[0], "FA00007035000;");
+}
+
+// ---------------------------------------------------------------------------
+// A3: Data mode guard — data_mode_for_frequency + ensure_data_mode behaviour
+// ---------------------------------------------------------------------------
+
+/// Pure helper: frequencies below 10 MHz map to DATA-LSB.
+#[test]
+fn data_mode_for_low_hf_bands() {
+    assert_eq!(data_mode_for_frequency(1_838_000.0), "DATA-LSB"); // 160m
+    assert_eq!(data_mode_for_frequency(3_580_000.0), "DATA-LSB"); // 80m
+    assert_eq!(data_mode_for_frequency(7_035_000.0), "DATA-LSB"); // 40m
+    assert_eq!(data_mode_for_frequency(9_999_999.0), "DATA-LSB"); // just below threshold
+}
+
+/// Pure helper: frequencies 10 MHz and above map to DATA-USB.
+#[test]
+fn data_mode_for_high_hf_bands() {
+    assert_eq!(data_mode_for_frequency(10_142_000.0), "DATA-USB"); // 30m
+    assert_eq!(data_mode_for_frequency(14_070_000.0), "DATA-USB"); // 20m
+    assert_eq!(data_mode_for_frequency(18_100_000.0), "DATA-USB"); // 17m
+    assert_eq!(data_mode_for_frequency(21_080_000.0), "DATA-USB"); // 15m
+    assert_eq!(data_mode_for_frequency(28_120_000.0), "DATA-USB"); // 10m
+    assert_eq!(data_mode_for_frequency(10_000_000.0), "DATA-USB"); // exact threshold
+}
+
+/// MockRadio at 20m in wrong mode (LSB) → mode guard corrects to DATA-USB.
+#[test]
+fn mode_guard_corrects_mode_on_20m() {
+    let mut radio = MockRadio::new();
+    // Radio starts at 14.070 MHz / DATA-USB; put it in the wrong mode
+    radio.set_mode("LSB").unwrap();
+    assert_eq!(radio.get_mode().unwrap(), "LSB");
+
+    // Simulate the ensure_data_mode logic
+    let hz = radio.get_frequency().unwrap().as_hz();
+    let target = data_mode_for_frequency(hz);
+    let current = radio.get_mode().unwrap();
+    if current != target {
+        radio.set_mode(target).unwrap();
+    }
+
+    assert_eq!(radio.get_mode().unwrap(), "DATA-USB");
+}
+
+/// MockRadio on 40m in wrong mode (USB) → mode guard corrects to DATA-LSB.
+#[test]
+fn mode_guard_corrects_mode_on_40m() {
+    let mut radio = MockRadio::new();
+    radio.set_frequency(Frequency::hz(7_035_000.0)).unwrap();
+    radio.set_mode("USB").unwrap();
+
+    let hz = radio.get_frequency().unwrap().as_hz();
+    let target = data_mode_for_frequency(hz);
+    let current = radio.get_mode().unwrap();
+    if current != target {
+        radio.set_mode(target).unwrap();
+    }
+
+    assert_eq!(radio.get_mode().unwrap(), "DATA-LSB");
+}
+
+/// MockRadio already in DATA-USB on 20m → mode guard is a no-op.
+#[test]
+fn mode_guard_noop_when_mode_already_correct() {
+    let mut radio = MockRadio::new(); // 14.070 MHz / DATA-USB by default
+
+    let hz = radio.get_frequency().unwrap().as_hz();
+    let target = data_mode_for_frequency(hz);
+    let current = radio.get_mode().unwrap();
+
+    // Should not need to change
+    assert_eq!(current, target, "mode should already be correct");
+    // (no set_mode call made — if we did, it would still be DATA-USB)
 }
 
 /// PTT state is preserved in AppState across multiple lock acquisitions.

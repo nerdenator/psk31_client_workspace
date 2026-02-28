@@ -17,8 +17,55 @@ use tauri::{AppHandle, Emitter};
 
 use crate::adapters::cpal_audio::CpalAudioOutput;
 use crate::modem::encoder::Psk31Encoder;
-use crate::ports::AudioOutput;
+use crate::ports::{AudioOutput, RadioControl};
 use crate::state::AppState;
+
+/// Determine the correct PSK-31 DATA mode for a given radio frequency.
+///
+/// By HF convention:
+/// - Below 10 MHz (160m, 80m, 60m, 40m): lower sideband → DATA-LSB
+/// - 10 MHz and above (30m through 10m): upper sideband → DATA-USB
+pub fn data_mode_for_frequency(hz: f64) -> &'static str {
+    if hz < 10_000_000.0 {
+        "DATA-LSB"
+    } else {
+        "DATA-USB"
+    }
+}
+
+/// Query the radio's current frequency and mode; if the mode is not the correct
+/// DATA variant for that frequency, correct it.
+///
+/// Non-fatal: any error is logged as a warning and TX proceeds regardless.
+fn ensure_data_mode(radio: &mut dyn RadioControl) {
+    let hz = match radio.get_frequency() {
+        Ok(f) => f.as_hz(),
+        Err(e) => {
+            log::warn!("Mode guard: could not read frequency: {e}");
+            return;
+        }
+    };
+
+    let target = data_mode_for_frequency(hz);
+
+    let current = match radio.get_mode() {
+        Ok(m) => m,
+        Err(e) => {
+            log::warn!("Mode guard: could not read mode: {e}");
+            return;
+        }
+    };
+
+    if current != target {
+        log::info!(
+            "Mode guard: correcting {current} → {target} for {:.3} MHz",
+            hz / 1e6
+        );
+        if let Err(e) = radio.set_mode(target) {
+            log::warn!("Mode guard: set_mode({target}) failed: {e}");
+        }
+    }
+}
 
 /// Payload for `tx-status` events sent to the frontend
 #[derive(Clone, Serialize)]
@@ -54,6 +101,13 @@ pub fn start_tx(
     // Reset abort flag
     let abort = state.tx_abort.clone();
     abort.store(false, Ordering::SeqCst);
+
+    // Verify DATA mode matches the radio's current frequency (non-fatal)
+    if let Ok(mut radio_guard) = state.radio.lock() {
+        if let Some(radio) = radio_guard.as_mut() {
+            ensure_data_mode(radio.as_mut());
+        }
+    }
 
     // Set TX power before keying up (ignore errors if no radio connected)
     if let Ok(mut radio_guard) = state.radio.lock() {

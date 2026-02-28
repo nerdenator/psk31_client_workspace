@@ -18,6 +18,9 @@ pub mod dsp;
 pub mod modem;
 pub mod ports;
 
+// CAT command layer (encode/decode/session)
+pub mod cat;
+
 // Adapters (external I/O)
 pub mod adapters;
 

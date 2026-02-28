@@ -43,6 +43,10 @@ pub struct SerialPortInfo {
     pub port_type: String,
 }
 
+fn default_tx_power_watts() -> u32 {
+    25
+}
+
 /// Modem configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModemConfig {
@@ -52,6 +56,9 @@ pub struct ModemConfig {
     pub carrier_freq: f64,
     /// FFT size for waterfall display
     pub fft_size: usize,
+    /// TX power in watts (applied before PTT ON)
+    #[serde(default = "default_tx_power_watts")]
+    pub tx_power_watts: u32,
 }
 
 impl Default for ModemConfig {
@@ -60,6 +67,7 @@ impl Default for ModemConfig {
             sample_rate: 48000,
             carrier_freq: 1000.0,
             fft_size: 4096,
+            tx_power_watts: default_tx_power_watts(),
         }
     }
 }

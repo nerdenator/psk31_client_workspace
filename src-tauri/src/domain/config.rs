@@ -5,6 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 
+fn default_tx_power_watts() -> u32 {
+    25
+}
+
 fn default_waterfall_palette() -> String {
     "classic".to_string()
 }
@@ -43,6 +47,9 @@ pub struct Configuration {
     /// Waterfall zoom level (1, 2, or 4)
     #[serde(default = "default_waterfall_zoom")]
     pub waterfall_zoom: u32,
+    /// TX power in watts applied before PTT ON (0–100)
+    #[serde(default = "default_tx_power_watts")]
+    pub tx_power_watts: u32,
 }
 
 impl Default for Configuration {
@@ -58,6 +65,7 @@ impl Default for Configuration {
             waterfall_palette: default_waterfall_palette(),
             waterfall_noise_floor: default_waterfall_noise_floor(),
             waterfall_zoom: default_waterfall_zoom(),
+            tx_power_watts: default_tx_power_watts(),
         }
     }
 }

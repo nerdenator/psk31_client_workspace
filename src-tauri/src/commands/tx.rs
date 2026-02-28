@@ -55,6 +55,16 @@ pub fn start_tx(
     let abort = state.tx_abort.clone();
     abort.store(false, Ordering::SeqCst);
 
+    // Set TX power before keying up (ignore errors if no radio connected)
+    if let Ok(mut radio_guard) = state.radio.lock() {
+        if let Some(radio) = radio_guard.as_mut() {
+            let target_watts = state.config.lock().unwrap().tx_power_watts;
+            if let Err(e) = radio.set_tx_power(target_watts) {
+                log::warn!("TX power set failed (continuing): {e}");
+            }
+        }
+    }
+
     // Try to activate PTT (ignore errors if no radio connected)
     let ptt_result = state
         .radio

@@ -2,7 +2,7 @@
 
 use crate::domain::{Frequency, Psk31Result};
 
-/// Trait for radio control (PTT, frequency, mode)
+/// Trait for radio control (PTT, frequency, mode, TX power)
 pub trait RadioControl: Send {
     /// Engage PTT (start transmitting)
     fn ptt_on(&mut self) -> Psk31Result<()>;
@@ -24,4 +24,10 @@ pub trait RadioControl: Send {
 
     /// Set operating mode
     fn set_mode(&mut self, mode: &str) -> Psk31Result<()>;
+
+    /// Get TX power in watts
+    fn get_tx_power(&mut self) -> Psk31Result<u32>;
+
+    /// Set TX power in watts
+    fn set_tx_power(&mut self, watts: u32) -> Psk31Result<()>;
 }

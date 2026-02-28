@@ -1,0 +1,121 @@
+//! Pure encoding: CatCommand → CAT wire string.
+//!
+//! No I/O, no side effects. Easy to unit-test without any serial port.
+//!
+//! In Python terms this is like a pure function module — you pass in a
+//! command value and get back the exact bytes to send to the radio.
+
+use super::{CatCommand, MODE_TABLE};
+
+/// Encode a CatCommand into the FT-991A wire string (including the `;` terminator).
+pub fn encode(cmd: &CatCommand) -> String {
+    use CatCommand::*;
+    match cmd {
+        GetFrequencyA => "FA;".into(),
+        SetFrequencyA(hz) => format!("FA{hz:011};"),
+        GetMode => "MD0;".into(),
+        SetMode(name) => {
+            let code = MODE_TABLE
+                .iter()
+                .find(|(_, n)| *n == name.as_str())
+                .map(|(c, _)| *c)
+                .unwrap_or("C"); // fallback: DATA-USB
+            format!("MD0{code};")
+        }
+        PttOff => "TX0;".into(),
+        PttOn => "TX1;".into(),
+        GetTxPower => "PC;".into(),
+        SetTxPower(w) => format!("PC{w:03};"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use CatCommand::*;
+
+    #[test]
+    fn encode_get_frequency_a() {
+        assert_eq!(encode(&GetFrequencyA), "FA;");
+    }
+
+    #[test]
+    fn encode_set_frequency_20m() {
+        assert_eq!(encode(&SetFrequencyA(14_070_000)), "FA00014070000;");
+    }
+
+    #[test]
+    fn encode_set_frequency_40m() {
+        assert_eq!(encode(&SetFrequencyA(7_035_000)), "FA00007035000;");
+    }
+
+    #[test]
+    fn encode_set_frequency_zero_padded() {
+        assert_eq!(encode(&SetFrequencyA(1_800_000)), "FA00001800000;");
+    }
+
+    #[test]
+    fn encode_get_mode() {
+        assert_eq!(encode(&GetMode), "MD0;");
+    }
+
+    #[test]
+    fn encode_set_mode_data_usb() {
+        assert_eq!(encode(&SetMode("DATA-USB".into())), "MD0C;");
+    }
+
+    #[test]
+    fn encode_set_mode_usb() {
+        assert_eq!(encode(&SetMode("USB".into())), "MD02;");
+    }
+
+    #[test]
+    fn encode_set_mode_lsb() {
+        assert_eq!(encode(&SetMode("LSB".into())), "MD01;");
+    }
+
+    #[test]
+    fn encode_set_mode_unknown_falls_back_to_data_usb() {
+        // Unknown modes fall back to DATA-USB (code "C")
+        assert_eq!(encode(&SetMode("GIBBERISH".into())), "MD0C;");
+    }
+
+    #[test]
+    fn encode_ptt_on() {
+        assert_eq!(encode(&PttOn), "TX1;");
+    }
+
+    #[test]
+    fn encode_ptt_off() {
+        assert_eq!(encode(&PttOff), "TX0;");
+    }
+
+    #[test]
+    fn encode_get_tx_power() {
+        assert_eq!(encode(&GetTxPower), "PC;");
+    }
+
+    #[test]
+    fn encode_set_tx_power_25w() {
+        assert_eq!(encode(&SetTxPower(25)), "PC025;");
+    }
+
+    #[test]
+    fn encode_set_tx_power_100w() {
+        assert_eq!(encode(&SetTxPower(100)), "PC100;");
+    }
+
+    #[test]
+    fn encode_set_tx_power_zero() {
+        assert_eq!(encode(&SetTxPower(0)), "PC000;");
+    }
+
+    #[test]
+    fn encode_all_modes_roundtrip() {
+        use super::super::MODE_TABLE;
+        for (code, name) in MODE_TABLE {
+            let encoded = encode(&SetMode(name.to_string()));
+            assert_eq!(encoded, format!("MD0{code};"), "Roundtrip failed for mode '{name}'");
+        }
+    }
+}

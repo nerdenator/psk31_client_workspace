@@ -283,4 +283,16 @@ mod tests {
         radio.set_tx_power(50).unwrap();
         assert_eq!(log.lock().unwrap()[0], "PC050;");
     }
+
+    #[test]
+    fn set_tx_power_rejects_over_100w() {
+        // Regression: >100 W produces a 4-digit PC wire string the radio rejects.
+        // The validation must fire before any bytes reach the wire.
+        let (mut radio, log) = make_radio(";");
+        assert!(radio.set_tx_power(101).is_err());
+        assert!(
+            log.lock().unwrap().is_empty(),
+            "no bytes should reach the wire for out-of-range power"
+        );
+    }
 }

@@ -107,4 +107,24 @@ mod tests {
             expected_bin
         );
     }
+
+    #[test]
+    fn compute_repeated_calls_give_identical_results() {
+        // Regression: before caching the FFT plan, plan_fft_forward() was called on every
+        // compute() invocation. While not a correctness bug, repeated planning could return
+        // different (or inconsistent) plan objects. Verify the cached plan produces
+        // bit-identical output across multiple calls on the same input.
+        let mut processor = FftProcessor::new(1024);
+        let samples: Vec<f32> = (0..1024)
+            .map(|i| (2.0 * std::f32::consts::PI * 1000.0 * i as f32 / 48000.0).sin())
+            .collect();
+
+        let first = processor.compute(&samples);
+        let second = processor.compute(&samples);
+
+        assert_eq!(
+            first, second,
+            "repeated compute() calls must return identical results"
+        );
+    }
 }

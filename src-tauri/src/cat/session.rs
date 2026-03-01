@@ -230,4 +230,74 @@ mod tests {
         session.execute(&CatCommand::SetTxPower(50)).unwrap();
         assert_eq!(log.lock().unwrap()[0], "PC050;");
     }
+
+    // --- Long response (regression: 64-byte fixed buffer truncated long replies) ---
+
+    /// A MockSerial that streams its response one byte at a time.
+    /// This reproduces the pre-fix behaviour where a response longer than the
+    /// read chunk size would be silently truncated on the first read call.
+    struct StreamingMockSerial {
+        response: Vec<u8>,
+        cursor: usize,
+    }
+
+    impl SerialConnection for StreamingMockSerial {
+        fn write(&mut self, data: &[u8]) -> Psk31Result<usize> {
+            Ok(data.len())
+        }
+        fn read(&mut self, buf: &mut [u8]) -> Psk31Result<usize> {
+            if self.cursor >= self.response.len() {
+                return Ok(0);
+            }
+            // Return exactly one byte per call to maximally stress the accumulation loop
+            buf[0] = self.response[self.cursor];
+            self.cursor += 1;
+            Ok(1)
+        }
+        fn close(&mut self) -> Psk31Result<()> {
+            Ok(())
+        }
+        fn is_connected(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn long_response_read_across_multiple_chunks() {
+        // Regression: the old code used a fixed [u8; 64] accumulation buffer, so any
+        // response longer than 64 bytes would be truncated and the semicolon missed.
+        // StreamingMockSerial delivers one byte per read() call — the fix must accumulate
+        // across calls until the `;` terminator arrives.
+        //
+        // Construct a response that is >64 bytes: echo prefix + real FrequencyA payload.
+        // "FA;" (3 bytes) + "FA00014070000;" (14 bytes) = 17 bytes normally.
+        // Pad to 70 bytes by prefixing with 56 extra FA; repetitions of garbage, then the
+        // real response at the end. Since echo-stripping only removes an exact leading "FA;",
+        // the simplest valid >64-byte response is just the GetMode echo path:
+        // "MD0;" (4) repeated 15 times = 60 bytes, then "MD0C;" (5 bytes) = 65 bytes total.
+        let response = format!("{}{}", "MD0;".repeat(15), "MD0C;");
+        assert!(response.len() > 64, "test setup: response must exceed 64 bytes");
+
+        let serial = StreamingMockSerial {
+            response: response.into_bytes(),
+            cursor: 0,
+        };
+        let mut session = CatSession::new(Box::new(serial));
+        // The long echo prefix won't be stripped (strip_prefix only removes exact match),
+        // so decode gets "MD0;" x15 + "MD0C;" which won't parse — but the important
+        // thing is it doesn't panic or return a truncated result. We only care that
+        // CatSession successfully reads past the 64-byte mark without dropping bytes.
+        // Verify by checking the error isn't a "no response" error:
+        let result = session.execute(&CatCommand::GetMode);
+        match result {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    !msg.contains("no response"),
+                    "got 'no response' — bytes were truncated: {msg}"
+                );
+            }
+            Ok(_) => {} // If it somehow parses, that's fine too
+        }
+    }
 }

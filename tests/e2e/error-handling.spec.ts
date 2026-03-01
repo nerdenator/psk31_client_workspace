@@ -244,3 +244,64 @@ test.describe('Full Application Flow', () => {
     await expect(page.locator('#serial-connect-btn')).toHaveText('Connect');
   });
 });
+
+test.describe('TX PTT Regression', () => {
+  /**
+   * Regression: onError in control-panel.ts did not call stopTx() before clearing TX
+   * state, so PTT was never released when the backend reported a TX failure.
+   * Verify that a tx-status:error event causes stop_tx to be invoked.
+   */
+  test('tx-status error event calls stop_tx and returns UI to RX', async ({ page }) => {
+    const stopTxCalls: string[] = [];
+
+    await mockInvoke(page, {
+      ...DISCONNECTED_STATUS,
+      start_tx: null,
+      stop_tx: null,
+    });
+
+    // Intercept invoke to record stop_tx calls and fire an error event on start_tx
+    await page.addInitScript(() => {
+      const orig = (window as any).__TAURI_INTERNALS__.invoke;
+      (window as any).__TAURI_INTERNALS__.invoke = (cmd: string, args?: any) => {
+        if (cmd === 'stop_tx') {
+          (window as any).__stopTxCallCount__ = ((window as any).__stopTxCallCount__ ?? 0) + 1;
+        }
+        if (cmd === 'start_tx') {
+          setTimeout(() => {
+            (window as any).__dispatchTauriEvent__('tx-status', {
+              status: 'error',
+              progress: 0.0,
+            });
+          }, 100);
+        }
+        return orig(cmd, args);
+      };
+    });
+
+    await page.goto('/');
+
+    // Inject an audio output option so the TX send button is not blocked
+    await page.evaluate(() => {
+      const select = document.getElementById('audio-output') as HTMLSelectElement;
+      const opt = document.createElement('option');
+      opt.value = 'test-out';
+      opt.textContent = 'Test Output';
+      select.appendChild(opt);
+      select.value = 'test-out';
+    });
+
+    await page.locator('#tx-input').fill('TEST');
+    await page.locator('.tx-btn-send').click();
+
+    // UI must enter TX state immediately
+    await expect(page.locator('.ptt-indicator')).toHaveText('TX');
+
+    // After the error event fires, UI must return to RX
+    await expect(page.locator('.ptt-indicator')).toHaveText('RX', { timeout: 3000 });
+
+    // stop_tx must have been called (PTT released) — regression check
+    const count = await page.evaluate(() => (window as any).__stopTxCallCount__ ?? 0);
+    expect(count).toBeGreaterThanOrEqual(1);
+  });
+});

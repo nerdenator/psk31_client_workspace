@@ -6,7 +6,7 @@
 //!    - Activates PTT (if radio connected)
 //!    - Plays the samples via CpalAudioOutput
 //!    - Emits progress events to the frontend
-//!    - Deactivates PTT when done
+//!    - Emits a `tx-status: complete` event; the frontend calls stop_tx to deactivate PTT
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -23,9 +23,15 @@ use crate::state::AppState;
 /// Determine the correct PSK-31 DATA mode for a given radio frequency.
 ///
 /// By HF convention:
-/// - Below 10 MHz (160m, 80m, 60m, 40m): lower sideband → DATA-LSB
+/// - Below 10 MHz (160m, 80m, 40m): lower sideband → DATA-LSB
 /// - 10 MHz and above (30m through 10m): upper sideband → DATA-USB
+///
+/// Exception: 60m (5.332–5.405 MHz) is USB-only per FCC Part 97.307(f)(11).
 pub fn data_mode_for_frequency(hz: f64) -> &'static str {
+    // 60m: FCC Part 97.307(f)(11) mandates USB regardless of the below-10-MHz convention
+    if (5_332_000.0..=5_405_000.0).contains(&hz) {
+        return "DATA-USB";
+    }
     if hz < 10_000_000.0 {
         "DATA-LSB"
     } else {
@@ -268,8 +274,8 @@ fn run_tx_thread(
                 },
             );
 
-            // PTT OFF — we need access to the radio, but we're on the TX thread.
-            // The frontend will call stop_tx or handle PTT via the status event.
+            // PTT OFF is handled by the frontend: onComplete calls stop_tx(),
+            // which joins this thread (already finished) and calls ptt_off().
             return;
         }
 

@@ -16,7 +16,10 @@ use super::{decode, encode, CatCommand, CatResponse};
 /// Minimum delay between CAT commands (FT-991A firmware requirement)
 const COMMAND_DELAY_MS: u64 = 50;
 
-/// Read buffer size for CAT responses
+/// Read buffer size for CAT responses.
+/// TODO: if a response ever exceeds this, buf[total..] becomes zero-length,
+/// read() returns Ok(0) each attempt, and the loop returns a silently truncated string.
+/// All current FT-991A responses fit well within 64 bytes, but this is fragile.
 const READ_BUF_SIZE: usize = 64;
 
 /// Max read attempts before giving up (~100ms per attempt → ~500ms total)
@@ -51,6 +54,9 @@ impl CatSession {
             .write(wire.as_bytes())
             .map_err(|e| Psk31Error::Cat(format!("Command '{wire}' write failed: {e}")))?;
 
+        // TODO: if read_until_semicolon returns Err (early exit via ?), last_command_time
+        // is not updated. The next execute() will see a stale timestamp and may skip
+        // the 50ms inter-command delay, issuing the next command too soon after an I/O failure.
         let raw = self.read_until_semicolon(&wire)?;
         self.last_command_time = Some(Instant::now());
 

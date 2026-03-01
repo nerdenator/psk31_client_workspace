@@ -52,7 +52,12 @@ export function setupTxButtons(): void {
     onTransmitting: (_progress) => {
       // Could update a progress bar here in future
     },
-    onComplete: () => {
+    onComplete: async () => {
+      try {
+        await stopTx(); // releases PTT
+      } catch (err) {
+        console.error('PTT off failed:', err);
+      }
       setTxState(false);
     },
     onAborted: () => {

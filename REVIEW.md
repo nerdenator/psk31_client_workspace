@@ -58,7 +58,7 @@ src-tauri/src/
 │   ├── varicode.rs  # Varicode encode/decode tables
 │   ├── encoder.rs   # Text → Varicode bits → BPSK samples
 │   ├── decoder.rs   # BPSK samples → Varicode bits → text
-│   └── pipeline.rs  # RX DSP pipeline (AGC→Costas→ClockRecovery→Varicode)
+│   └── pipeline.rs  # Stub (TODO) — RX pipeline logic lives in decoder.rs
 │
 ├── cat/             # CAT command translation layer (Phase 9A, in progress)
 │   ├── encode.rs    # Rust types → FT-991A CAT ASCII strings
@@ -212,7 +212,7 @@ Key files in `tests/e2e/`:
 The following areas have complexity worth examining closely:
 
 1. **`src-tauri/src/dsp/costas_loop.rs`** — PLL implementation; gains are empirically tuned and the rationale is only in comments/memory
-2. **`src-tauri/src/modem/pipeline.rs`** — Orchestrates the full RX chain; check that state resets correctly on `set_carrier_frequency`
+2. **`src-tauri/src/modem/decoder.rs`** — Orchestrates the full RX chain (AGC → Costas Loop → Clock Recovery → Varicode); check that state resets correctly on `set_carrier_frequency`
 3. **`src-tauri/src/state.rs`** — All shared state; check for lock ordering, potential deadlocks, and that `Arc<AtomicBool>` flags are used correctly
 4. **`src-tauri/src/commands/radio.rs`** — `with_radio()` helper and error→event propagation path
 5. **`src/services/app-state.ts`** — Pub/sub config; check subscriber cleanup and initialization ordering

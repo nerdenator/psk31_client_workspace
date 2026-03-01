@@ -97,9 +97,16 @@ impl Psk31Encoder {
             // Get the envelope shape for this symbol
             let envelope = shaper.generate_envelope(phase_change);
 
-            // If this bit causes a phase change, flip the NCO phase at the
-            // envelope's minimum point (center of symbol). We do it before
-            // generating samples so the phase flip is smoothed by the envelope.
+            // TODO: phase flip timing bug. The phase is flipped here at the START of the
+            // symbol, but the envelope is 1.0 at the symbol start (and dips to 0 at the
+            // midpoint). This causes a hard discontinuity at full amplitude — exactly what
+            // raised cosine shaping is supposed to prevent. Correct PSK-31 requires the
+            // phase to flip when the envelope crosses zero, i.e. the transition should span
+            // the boundary between the previous and current symbol:
+            //   - first half of current symbol: old phase × falling envelope (1→0)
+            //   - second half of current symbol: new phase × rising envelope (0→1)
+            // Fixing this requires restructuring bits_to_samples to look ahead at the next
+            // bit. The current approach passes loopback tests but causes spectral splatter.
             if phase_change {
                 nco.adjust_phase(std::f64::consts::PI);
             }

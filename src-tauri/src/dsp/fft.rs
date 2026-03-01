@@ -1,10 +1,11 @@
 //! FFT processing for waterfall display
 
-use rustfft::{FftPlanner, num_complex::Complex};
+use std::sync::Arc;
+use rustfft::{Fft, FftPlanner, num_complex::Complex};
 
 /// FFT processor for computing spectral data
 pub struct FftProcessor {
-    planner: FftPlanner<f32>,
+    fft: Arc<dyn Fft<f32>>,
     fft_size: usize,
     window: Vec<f32>,
 }
@@ -13,7 +14,7 @@ impl FftProcessor {
     /// Create a new FFT processor with the given size
     pub fn new(fft_size: usize) -> Self {
         let mut planner = FftPlanner::new();
-        let _fft = planner.plan_fft_forward(fft_size);
+        let fft = planner.plan_fft_forward(fft_size);
 
         // Generate Hanning window
         let window: Vec<f32> = (0..fft_size)
@@ -24,7 +25,7 @@ impl FftProcessor {
             .collect();
 
         Self {
-            planner,
+            fft,
             fft_size,
             window,
         }
@@ -33,7 +34,7 @@ impl FftProcessor {
     /// Compute FFT and return magnitude in dB
     /// Input should have at least `fft_size` samples
     pub fn compute(&mut self, samples: &[f32]) -> Vec<f32> {
-        let fft = self.planner.plan_fft_forward(self.fft_size);
+        let fft = &self.fft;
 
         // Apply window and convert to complex
         let mut buffer: Vec<Complex<f32>> = samples

@@ -7,7 +7,6 @@
 /// Symbol clock recovery using Mueller-Muller timing error detector
 pub struct ClockRecovery {
     samples_per_symbol: f64,
-    mu: f64,           // Fractional sample offset (0.0 - 1.0) — TODO: unused; currently only omega is updated. Either implement fractional interpolation or remove this field.
     omega: f64,        // Current samples-per-symbol estimate
     gain_omega: f64,   // Timing gain (how fast omega adapts)
     last_symbol: f32,  // Previous symbol decision-point value
@@ -21,7 +20,6 @@ impl ClockRecovery {
     pub fn new(samples_per_symbol: f64) -> Self {
         Self {
             samples_per_symbol,
-            mu: 0.5,
             omega: samples_per_symbol,
             gain_omega: 0.001,
             last_symbol: 0.0,
@@ -68,7 +66,6 @@ impl ClockRecovery {
 
     /// Reset the clock recovery state
     pub fn reset(&mut self) {
-        self.mu = 0.5;
         self.omega = self.samples_per_symbol;
         self.last_symbol = 0.0;
         self.sample_count = 0.0;

@@ -63,8 +63,13 @@ export function setupTxButtons(): void {
     onAborted: () => {
       setTxState(false);
     },
-    onError: (msg) => {
+    onError: async (msg) => {
       console.error('TX error:', msg);
+      try {
+        await stopTx(); // releases PTT and clears tx_thread handle
+      } catch (err) {
+        console.error('PTT off failed after TX error:', err);
+      }
       setTxState(false);
     },
   });

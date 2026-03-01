@@ -76,9 +76,10 @@ pub fn start_audio_stream(
     let rx_running = state.rx_running.clone();
     let rx_carrier_freq = state.rx_carrier_freq.clone();
     let audio_device_name = state.audio_device_name.clone();
+    let sample_rate = state.config.lock().unwrap().sample_rate;
 
     let handle = thread::spawn(move || {
-        run_audio_thread(app, running, rx_running, rx_carrier_freq, audio_device_name, device_id);
+        run_audio_thread(app, running, rx_running, rx_carrier_freq, audio_device_name, device_id, sample_rate);
     });
 
     state
@@ -145,6 +146,7 @@ fn run_audio_thread(
     rx_carrier_freq: Arc<Mutex<f64>>,
     audio_device_name: Arc<Mutex<Option<String>>>,
     device_id: String,
+    sample_rate: u32,
 ) {
     // Emit status
     let _ = app.emit("audio-status", AudioStatusPayload { status: "running".into() });
@@ -159,7 +161,9 @@ fn run_audio_thread(
     let capture_result = audio_input.start(
         &device_id,
         Box::new(move |samples: &[f32]| {
-            // Push samples into ring buffer, dropping oldest if full (never blocks)
+            // Push samples into ring buffer; try_push drops the newest sample if full
+            // (oldest data stays). For real-time audio, push_overwrite (drop oldest)
+            // would be preferable — consider switching if latency becomes an issue.
             for &sample in samples {
                 let _ = producer.try_push(sample);
             }
@@ -181,9 +185,9 @@ fn run_audio_thread(
     let mut fft = FftProcessor::new(fft_size);
     let mut sample_buf: Vec<f32> = Vec::with_capacity(fft_size);
 
-    // RX decoder — created with initial carrier freq, retuned dynamically
+    // RX decoder — created with configured sample rate and initial carrier freq
     let initial_carrier = *rx_carrier_freq.lock().unwrap();
-    let mut decoder = Psk31Decoder::new(initial_carrier, 48000);
+    let mut decoder = Psk31Decoder::new(initial_carrier, sample_rate);
     let mut current_carrier = initial_carrier;
 
     // Buffer decoded chars to emit in batches (reduces event overhead)

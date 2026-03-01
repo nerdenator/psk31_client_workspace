@@ -19,13 +19,16 @@ pub fn encode(cmd: &CatCommand) -> String {
                 .iter()
                 .find(|(_, n)| *n == name.as_str())
                 .map(|(c, _)| *c)
-                .unwrap_or("C"); // fallback: DATA-USB — TODO: log a warning here; unknown mode names silently send DATA-USB
+                .unwrap_or_else(|| {
+                    log::warn!("encode: unknown mode '{name}', falling back to DATA-USB");
+                    "C"
+                });
             format!("MD0{code};")
         }
         PttOff => "TX0;".into(),
         PttOn => "TX1;".into(),
         GetTxPower => "PC;".into(),
-        SetTxPower(w) => format!("PC{w:03};"), // TODO: w > 100 produces a 4-digit string the radio rejects; add a bounds check in set_tx_power()
+        SetTxPower(w) => format!("PC{w:03};"),
     }
 }
 

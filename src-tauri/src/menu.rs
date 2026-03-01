@@ -108,7 +108,7 @@ pub fn setup_menu(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 
         // Handle quit specially (doesn't need frontend)
         if id == "quit" {
-            std::process::exit(0);
+            app_handle.exit(0);
         }
     });
 

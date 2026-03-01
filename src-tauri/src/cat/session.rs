@@ -16,11 +16,8 @@ use super::{decode, encode, CatCommand, CatResponse};
 /// Minimum delay between CAT commands (FT-991A firmware requirement)
 const COMMAND_DELAY_MS: u64 = 50;
 
-/// Read buffer size for CAT responses.
-/// TODO: if a response ever exceeds this, buf[total..] becomes zero-length,
-/// read() returns Ok(0) each attempt, and the loop returns a silently truncated string.
-/// All current FT-991A responses fit well within 64 bytes, but this is fragile.
-const READ_BUF_SIZE: usize = 64;
+/// Chunk size for each serial read call
+const READ_CHUNK_SIZE: usize = 64;
 
 /// Max read attempts before giving up (~100ms per attempt → ~500ms total)
 const RESPONSE_TIMEOUT_READS: usize = 5;
@@ -54,11 +51,10 @@ impl CatSession {
             .write(wire.as_bytes())
             .map_err(|e| Psk31Error::Cat(format!("Command '{wire}' write failed: {e}")))?;
 
-        // TODO: if read_until_semicolon returns Err (early exit via ?), last_command_time
-        // is not updated. The next execute() will see a stale timestamp and may skip
-        // the 50ms inter-command delay, issuing the next command too soon after an I/O failure.
-        let raw = self.read_until_semicolon(&wire)?;
+        let raw = self.read_until_semicolon(&wire);
+        // Update timestamp even on error so the next command still respects the delay
         self.last_command_time = Some(Instant::now());
+        let raw = raw?;
 
         log::debug!("CAT RX: {raw}");
 
@@ -75,21 +71,21 @@ impl CatSession {
     /// RESPONSE_TIMEOUT_READS times to handle slow USB-serial adapters
     /// that may return partial responses.
     fn read_until_semicolon(&mut self, cmd_wire: &str) -> Psk31Result<String> {
-        let mut buf = [0u8; READ_BUF_SIZE];
-        let mut total = 0;
+        let mut buf: Vec<u8> = Vec::with_capacity(READ_CHUNK_SIZE);
+        let mut chunk = [0u8; READ_CHUNK_SIZE];
 
         for _ in 0..RESPONSE_TIMEOUT_READS {
-            match self.serial.read(&mut buf[total..]) {
+            match self.serial.read(&mut chunk) {
                 Ok(n) if n > 0 => {
-                    total += n;
-                    if buf[..total].contains(&b';') {
+                    buf.extend_from_slice(&chunk[..n]);
+                    if buf.contains(&b';') {
                         break;
                     }
                 }
                 Ok(_) => {} // Zero bytes: read timed out, try again
                 Err(e) => {
                     // Timeout mid-response is fine; only propagate if nothing received yet
-                    if total == 0 {
+                    if buf.is_empty() {
                         return Err(Psk31Error::Cat(format!(
                             "Command '{cmd_wire}' read failed: {e}"
                         )));
@@ -98,13 +94,13 @@ impl CatSession {
             }
         }
 
-        if total == 0 {
+        if buf.is_empty() {
             return Err(Psk31Error::Cat(format!(
                 "Command '{cmd_wire}': no response from radio"
             )));
         }
 
-        std::str::from_utf8(&buf[..total])
+        std::str::from_utf8(&buf)
             .map(|s| s.to_string())
             .map_err(|e| Psk31Error::Cat(format!("Invalid UTF-8 response: {e}")))
     }

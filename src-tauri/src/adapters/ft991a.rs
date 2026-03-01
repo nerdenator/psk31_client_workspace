@@ -116,6 +116,11 @@ impl RadioControl for Ft991aRadio {
     }
 
     fn set_tx_power(&mut self, watts: u32) -> Psk31Result<()> {
+        if watts > 100 {
+            return Err(Psk31Error::Cat(format!(
+                "TX power {watts} W exceeds FT-991A maximum (100 W)"
+            )));
+        }
         self.session.execute(&CatCommand::SetTxPower(watts))?;
         Ok(())
     }

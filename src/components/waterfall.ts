@@ -50,7 +50,7 @@ export class WaterfallDisplay {
   }
 
   start(): void {
-    window.addEventListener('resize', this.resizeHandler);
+    // resize listener is registered in the constructor; nothing extra needed here
   }
 
   stop(): void {

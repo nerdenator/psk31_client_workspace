@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Baudacious",
+  "version": "0.1.0",
+  "identifier": "com.baudacious.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Baudacious",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "nerdenator industries",
+    "category": "Utility",
+    "copyright": "Copyright 2025 nerdenator industries",
+    "shortDescription": "PSK-31 ham radio keyboard-to-keyboard communication",
+    "longDescription": "A streamlined, single-purpose desktop application for PSK-31 BPSK digital mode communication over amateur radio. Features live spectral waterfall display, click-to-tune, keyboard-to-keyboard QSO capability, and Yaesu FT-991A CAT control.",
+    "linux": {
+      "deb": {
+        "depends": ["libasound2t64"]
+      }
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  }
+}

@@ -1,0 +1,295 @@
+//! TX commands — start/stop PSK-31 transmission
+//!
+//! The TX pipeline:
+//! 1. Encode text to BPSK-31 samples (upfront, not streaming)
+//! 2. Spawn a TX thread that:
+//!    - Activates PTT (if radio connected)
+//!    - Plays the samples via CpalAudioOutput
+//!    - Emits progress events to the frontend
+//!    - Emits a `tx-status: complete` event; the frontend calls stop_tx to deactivate PTT
+
+use serde::Serialize;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter};
+
+use crate::adapters::cpal_audio::CpalAudioOutput;
+use crate::modem::encoder::Psk31Encoder;
+use crate::ports::{AudioOutput, RadioControl};
+use crate::state::AppState;
+
+/// Determine the correct PSK-31 DATA mode for a given radio frequency.
+///
+/// By HF convention:
+/// - Below 10 MHz (160m, 80m, 40m): lower sideband → DATA-LSB
+/// - 10 MHz and above (30m through 10m): upper sideband → DATA-USB
+///
+/// Exception: 60m (5.332–5.405 MHz) is USB-only per FCC Part 97.307(f)(11).
+pub fn data_mode_for_frequency(hz: f64) -> &'static str {
+    // 60m: FCC Part 97.307(f)(11) mandates USB regardless of the below-10-MHz convention
+    if (5_332_000.0..=5_405_000.0).contains(&hz) {
+        return "DATA-USB";
+    }
+    if hz < 10_000_000.0 {
+        "DATA-LSB"
+    } else {
+        "DATA-USB"
+    }
+}
+
+/// Query the radio's current frequency and mode; if the mode is not the correct
+/// DATA variant for that frequency, correct it.
+///
+/// Non-fatal: any error is logged as a warning and TX proceeds regardless.
+fn ensure_data_mode(radio: &mut dyn RadioControl) {
+    let hz = match radio.get_frequency() {
+        Ok(f) => f.as_hz(),
+        Err(e) => {
+            log::warn!("Mode guard: could not read frequency: {e}");
+            return;
+        }
+    };
+
+    let target = data_mode_for_frequency(hz);
+
+    let current = match radio.get_mode() {
+        Ok(m) => m,
+        Err(e) => {
+            log::warn!("Mode guard: could not read mode: {e}");
+            return;
+        }
+    };
+
+    if current != target {
+        log::info!(
+            "Mode guard: correcting {current} → {target} for {:.3} MHz",
+            hz / 1e6
+        );
+        if let Err(e) = radio.set_mode(target) {
+            log::warn!("Mode guard: set_mode({target}) failed: {e}");
+        }
+    }
+}
+
+/// Payload for `tx-status` events sent to the frontend
+#[derive(Clone, Serialize)]
+struct TxStatusPayload {
+    status: String,
+    progress: f32,
+}
+
+#[tauri::command]
+pub fn start_tx(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    text: String,
+    device_id: String,
+) -> Result<(), String> {
+    // Check if already transmitting
+    if state.tx_thread.lock().unwrap().is_some() {
+        return Err("Already transmitting".into());
+    }
+
+    // Read carrier frequency from config
+    let carrier_freq = state.config.lock().unwrap().carrier_freq;
+    let sample_rate = state.config.lock().unwrap().sample_rate;
+
+    // Encode the entire message upfront
+    let encoder = Psk31Encoder::new(sample_rate, carrier_freq);
+    let samples = encoder.encode(&text);
+
+    if samples.is_empty() {
+        return Err("Nothing to transmit".into());
+    }
+
+    // Reset abort flag
+    let abort = state.tx_abort.clone();
+    abort.store(false, Ordering::SeqCst);
+
+    // Verify DATA mode matches the radio's current frequency (non-fatal)
+    if let Ok(mut radio_guard) = state.radio.lock() {
+        if let Some(radio) = radio_guard.as_mut() {
+            ensure_data_mode(radio.as_mut());
+        }
+    }
+
+    // Set TX power before keying up (ignore errors if no radio connected)
+    if let Ok(mut radio_guard) = state.radio.lock() {
+        if let Some(radio) = radio_guard.as_mut() {
+            let target_watts = state.config.lock().unwrap().tx_power_watts;
+            if let Err(e) = radio.set_tx_power(target_watts) {
+                log::warn!("TX power set failed (continuing): {e}");
+            }
+        }
+    }
+
+    // Try to activate PTT (ignore errors if no radio connected)
+    let ptt_result = state
+        .radio
+        .lock()
+        .ok()
+        .and_then(|mut guard| guard.as_mut().map(|r| r.ptt_on()));
+
+    if let Some(Err(e)) = ptt_result {
+        log::warn!("PTT ON failed (continuing without PTT): {e}");
+    }
+
+    // Shared playback position for progress tracking
+    let play_pos = Arc::new(AtomicUsize::new(0));
+    let total_samples = samples.len();
+
+    let handle = {
+        let abort = abort.clone();
+        let play_pos = play_pos.clone();
+
+        thread::spawn(move || {
+            run_tx_thread(app, abort, play_pos, samples, device_id, total_samples);
+        })
+    };
+
+    state.tx_thread.lock().unwrap().replace(handle);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_tx(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    // Signal abort
+    state.tx_abort.store(true, Ordering::SeqCst);
+
+    // Join the thread
+    if let Some(handle) = state.tx_thread.lock().unwrap().take() {
+        handle.join().map_err(|_| "TX thread panicked".to_string())?;
+    }
+
+    // PTT OFF (ignore errors if no radio)
+    let ptt_result = state
+        .radio
+        .lock()
+        .ok()
+        .and_then(|mut guard| guard.as_mut().map(|r| r.ptt_off()));
+
+    if let Some(Err(e)) = ptt_result {
+        log::warn!("PTT OFF failed: {e}");
+    }
+
+    Ok(())
+}
+
+/// TX thread: plays encoded samples through the audio output device.
+fn run_tx_thread(
+    app: AppHandle,
+    abort: Arc<std::sync::atomic::AtomicBool>,
+    play_pos: Arc<AtomicUsize>,
+    samples: Vec<f32>,
+    device_id: String,
+    total_samples: usize,
+) {
+    // Brief delay after PTT to let the radio switch to TX
+    thread::sleep(Duration::from_millis(50));
+
+    let _ = app.emit(
+        "tx-status",
+        TxStatusPayload {
+            status: "transmitting".into(),
+            progress: 0.0,
+        },
+    );
+
+    // Set up audio output with a callback that pulls from our sample buffer
+    let mut audio_output = CpalAudioOutput::new();
+    let samples_arc = Arc::new(samples);
+    let samples_for_callback = samples_arc.clone();
+    let pos_for_callback = play_pos.clone();
+    let done_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let done_for_callback = done_flag.clone();
+
+    let start_result = audio_output.start(
+        &device_id,
+        Box::new(move |output_buf: &mut [f32]| {
+            let current_pos = pos_for_callback.load(Ordering::Relaxed);
+            let remaining = total_samples.saturating_sub(current_pos);
+
+            if remaining == 0 {
+                // Fill with silence — we're done
+                for sample in output_buf.iter_mut() {
+                    *sample = 0.0;
+                }
+                done_for_callback.store(true, Ordering::SeqCst);
+                return;
+            }
+
+            let copy_len = output_buf.len().min(remaining);
+            output_buf[..copy_len]
+                .copy_from_slice(&samples_for_callback[current_pos..current_pos + copy_len]);
+
+            // Fill any remaining buffer with silence
+            for sample in output_buf[copy_len..].iter_mut() {
+                *sample = 0.0;
+            }
+
+            pos_for_callback.store(current_pos + copy_len, Ordering::Relaxed);
+        }),
+    );
+
+    if let Err(e) = start_result {
+        log::error!("Failed to start audio output: {e}");
+        let _ = app.emit(
+            "tx-status",
+            TxStatusPayload {
+                status: format!("error: {e}"),
+                progress: 0.0,
+            },
+        );
+        return;
+    }
+
+    // Wait for playback to finish or abort
+    loop {
+        if abort.load(Ordering::SeqCst) {
+            let _ = audio_output.stop();
+            let _ = app.emit(
+                "tx-status",
+                TxStatusPayload {
+                    status: "aborted".into(),
+                    progress: play_pos.load(Ordering::Relaxed) as f32 / total_samples as f32,
+                },
+            );
+
+            // PTT OFF from the calling context (stop_tx), not here
+            return;
+        }
+
+        if done_flag.load(Ordering::SeqCst) {
+            // Give a small buffer for the audio device to actually play the final samples
+            thread::sleep(Duration::from_millis(100));
+            let _ = audio_output.stop();
+            let _ = app.emit(
+                "tx-status",
+                TxStatusPayload {
+                    status: "complete".into(),
+                    progress: 1.0,
+                },
+            );
+
+            // PTT OFF is handled by the frontend: onComplete calls stop_tx(),
+            // which joins this thread (already finished) and calls ptt_off().
+            return;
+        }
+
+        // Emit progress
+        let pos = play_pos.load(Ordering::Relaxed);
+        let progress = pos as f32 / total_samples as f32;
+        let _ = app.emit(
+            "tx-status",
+            TxStatusPayload {
+                status: "transmitting".into(),
+                progress,
+            },
+        );
+
+        thread::sleep(Duration::from_millis(50));
+    }
+}

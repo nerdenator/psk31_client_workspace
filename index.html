@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PSK-31</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <div class="app-container">
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <!-- Waterfall Display -->
+        <section class="waterfall-section">
+          <div class="waterfall-header">
+            <span class="waterfall-label">Waterfall</span>
+            <div class="waterfall-controls">
+              <select id="wf-palette" class="wf-palette-select" title="Color palette">
+                <option value="classic">Classic</option>
+                <option value="heat">Heat</option>
+                <option value="viridis">Viridis</option>
+                <option value="grayscale">Grayscale</option>
+              </select>
+              <div class="wf-zoom-group">
+                <button class="wf-zoom-btn active" data-zoom="1">1×</button>
+                <button class="wf-zoom-btn" data-zoom="2">2×</button>
+                <button class="wf-zoom-btn" data-zoom="4">4×</button>
+              </div>
+              <div class="wf-gain-group">
+                <span class="wf-gain-label">Gain</span>
+                <input type="range" id="wf-gain" class="wf-gain-slider"
+                  min="-120" max="-60" value="-100" step="5">
+                <span id="wf-gain-value" class="wf-gain-value">-100</span>
+              </div>
+            </div>
+            <span class="waterfall-freq">1500 Hz</span>
+          </div>
+          <div class="waterfall-canvas-container">
+            <canvas id="waterfall-canvas"></canvas>
+            <div class="carrier-marker"></div>
+          </div>
+          <div class="waterfall-scale">
+            <span>500</span>
+            <span>1000</span>
+            <span>1500</span>
+            <span>2000</span>
+            <span>2500 Hz</span>
+          </div>
+        </section>
+
+        <!-- RX Display -->
+        <section class="rx-section">
+          <div class="rx-header">
+            <div class="rx-label">
+              <span class="rx-indicator"></span>
+              <span>RX</span>
+            </div>
+            <div class="rx-controls">
+              <button class="rx-btn">Clear</button>
+            </div>
+          </div>
+          <div class="rx-content" id="rx-content"></div>
+        </section>
+
+        <!-- TX Input -->
+        <section class="tx-section">
+          <div class="tx-header">
+            <div class="tx-label">
+              <span class="tx-indicator"></span>
+              <span>TX</span>
+            </div>
+            <div class="tx-char-count">
+              <span class="current">0</span> / 256
+            </div>
+          </div>
+          <div class="tx-input-container">
+            <textarea
+              id="tx-input"
+              placeholder="Type message to transmit..."
+              maxlength="256"
+            ></textarea>
+          </div>
+          <div class="tx-buttons">
+            <button class="tx-btn tx-btn-send">TX</button>
+            <button class="tx-btn tx-btn-abort" disabled>Abort</button>
+          </div>
+        </section>
+      </main>
+
+      <!-- Sidebar Controls -->
+      <aside class="sidebar">
+        <!-- Frequency -->
+        <div class="sidebar-section">
+          <div class="section-label">Frequency</div>
+          <div class="band-freq-control">
+            <select id="band-select" class="device-select" disabled>
+              <option value="">— no radio —</option>
+            </select>
+            <div class="freq-input-row">
+              <input type="number" id="freq-mhz-input" class="freq-mhz-input"
+                disabled step="0.001" min="1.8" max="30" />
+              <span class="frequency-unit">MHz</span>
+            </div>
+            <div id="freq-range-hint" class="freq-range-hint"></div>
+            <span class="frequency-mode" id="frequency-mode">—</span>
+          </div>
+        </div>
+
+        <!-- PTT Status -->
+        <div class="sidebar-section">
+          <div class="section-label">PTT</div>
+          <div class="ptt-container">
+            <div class="ptt-indicator rx">RX</div>
+            <div class="ptt-status">Receiving</div>
+          </div>
+        </div>
+
+        <!-- Audio Carrier -->
+        <div class="sidebar-section">
+          <div class="section-label">Audio Carrier</div>
+          <div class="frequency-display" style="padding: 8px 0;">
+            <div class="frequency-value" style="font-size: 16px;">1500</div>
+            <div class="frequency-unit">Hz</div>
+          </div>
+        </div>
+
+        <!-- Serial Port -->
+        <div class="sidebar-section">
+          <div class="section-label">Radio Control</div>
+          <div class="device-group">
+            <div class="device-label">Serial Port</div>
+            <select class="device-select" id="serial-port">
+              <option value="">Select port...</option>
+            </select>
+            <button class="serial-connect-btn" id="serial-connect-btn">Connect</button>
+          </div>
+        </div>
+
+        <!-- Audio Devices -->
+        <div class="sidebar-section">
+          <div class="section-label">
+            Audio
+            <button class="refresh-btn" id="audio-refresh-btn" title="Refresh audio devices">&#x21BB;</button>
+          </div>
+          <div class="device-group">
+            <div class="device-label">Input</div>
+            <select class="device-select" id="audio-input">
+              <option value="">Select device...</option>
+            </select>
+          </div>
+          <div class="device-group">
+            <div class="device-label">Output</div>
+            <select class="device-select" id="audio-output">
+              <option value="">Select device...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="sidebar-section">
+          <div class="section-label">Connections</div>
+          <div class="connection-item" id="cat-status">
+            <span class="connection-name">CAT</span>
+            <div class="connection-status">
+              <span class="status-dot disconnected"></span>
+              <span class="status-text disconnected">N/C</span>
+            </div>
+          </div>
+          <div class="connection-item" id="audio-in-status">
+            <span class="connection-name">Audio In</span>
+            <div class="connection-status">
+              <span class="status-dot disconnected"></span>
+              <span class="status-text disconnected">N/C</span>
+            </div>
+          </div>
+          <div class="connection-item" id="audio-out-status">
+            <span class="connection-name">Audio Out</span>
+            <div class="connection-status">
+              <span class="status-dot disconnected"></span>
+              <span class="status-text disconnected">N/C</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Status Bar -->
+      <footer class="status-bar">
+        <div class="status-left">
+          <div class="status-item" id="statusbar-serial">
+            <span class="status-dot disconnected"></span>
+            <span class="status-text disconnected">CAT</span>
+          </div>
+          <div class="status-item" id="statusbar-audio">
+            <span class="status-dot disconnected"></span>
+            <span class="status-text disconnected">Audio</span>
+          </div>
+        </div>
+        <div class="status-right">
+          <div class="status-item">
+            <span class="label">Carrier:</span>
+            <span class="value highlight">1500 Hz</span>
+          </div>
+          <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+            <span class="theme-toggle-icon">◐</span>
+          </button>
+          <span class="version-info">PSK-31 v0.1.0</span>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -451,14 +451,16 @@ Each phase includes implementation, unit tests, and E2E tests. Tests are written
 
 ---
 
-### Phase 7: UI Polish
+### Phase 7: UI Polish ✓
 **Implementation:**
 - Session A: Status bar cleanup (remove signal bars, Mode/Rate labels), waterfall black on init, clear RX placeholder
 - Session B: Band selector + per-band frequency input (replace static frequency display)
+- Session C: TX power panel (green/yellow/red zones, stepper buttons, numeric input, default 10W, syncs with radio on connect); serial port config moved from sidebar into Settings → Radio tab; startup recovery dialog (Retry/Select Profile/Reconfigure/Exit); Save & Apply reconnects serial; Vite hot-reload detection (hydrate UI from existing backend connection); audio devices restored on startup; Audio Out status indicator fixed; remove redundant audio stream dot; grey out controls when CAT disconnected; fix USB Audio CODEC on macOS output dropdown (cpal workaround with outputUnverified flag)
 
 **Status:**
 - [x] Session A: Status bar cleanup + waterfall black + clear RX placeholder
 - [x] Session B: Band selector + per-band frequency input
+- [x] Session C: TX power panel, serial-to-settings migration, audio UX fixes (74 E2E tests passing)
 
 ---
 

@@ -64,6 +64,7 @@ cargo test             # Run Rust unit tests (in src-tauri/)
 - [x] Phase 4: PSK-31 TX path
 - [x] Phase 5: PSK-31 RX path
 - [x] Phase 6: Integration + polish (status bar ✓, error handling ✓, waterfall controls ✓, settings dialog ✓, E2E tests ✓, bundler packaging ✓)
+- [x] Phase 7: UI polish (status bar cleanup ✓, band selector ✓, TX power panel ✓, serial-to-settings migration ✓, startup recovery dialog ✓, audio UX fixes ✓)
 
 ## Instructions for Claude
 

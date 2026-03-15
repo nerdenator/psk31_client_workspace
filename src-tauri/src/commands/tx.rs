@@ -4,16 +4,19 @@
 //! 1. Encode text to BPSK-31 samples (upfront, not streaming)
 //! 2. Spawn a TX thread that:
 //!    - Activates PTT (if radio connected)
+//!    - Waits 50ms for PTT settle
 //!    - Plays the samples via CpalAudioOutput
 //!    - Emits progress events to the frontend
-//!    - Emits a `tx-status: complete` event; the frontend calls stop_tx to deactivate PTT
+//!    - Deactivates PTT on both abort and complete paths
+//!    - Emits a `tx-status: complete` or `tx-status: aborted` event
+//! 3. stop_tx signals abort and calls PTT OFF as a belt-and-suspenders safety net
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::cpal_audio::CpalAudioOutput;
 use crate::modem::encoder::Psk31Encoder;
@@ -125,17 +128,6 @@ pub fn start_tx(
         }
     }
 
-    // Try to activate PTT (ignore errors if no radio connected)
-    let ptt_result = state
-        .radio
-        .lock()
-        .ok()
-        .and_then(|mut guard| guard.as_mut().map(|r| r.ptt_on()));
-
-    if let Some(Err(e)) = ptt_result {
-        log::warn!("PTT ON failed (continuing without PTT): {e}");
-    }
-
     // Shared playback position for progress tracking
     let play_pos = Arc::new(AtomicUsize::new(0));
     let total_samples = samples.len();
@@ -187,6 +179,16 @@ fn run_tx_thread(
     device_id: String,
     total_samples: usize,
 ) {
+    // Activate PTT at the top of the thread (before the settle delay)
+    let radio_state = app.state::<AppState>();
+    if let Ok(mut guard) = radio_state.radio.lock() {
+        if let Some(radio) = guard.as_mut() {
+            if let Err(e) = radio.ptt_on() {
+                log::warn!("PTT ON failed (continuing without PTT): {e}");
+            }
+        }
+    }
+
     // Brief delay after PTT to let the radio switch to TX
     thread::sleep(Duration::from_millis(50));
 
@@ -258,7 +260,14 @@ fn run_tx_thread(
                 },
             );
 
-            // PTT OFF from the calling context (stop_tx), not here
+            // PTT OFF — deactivate before returning
+            if let Ok(mut guard) = radio_state.radio.lock() {
+                if let Some(radio) = guard.as_mut() {
+                    if let Err(e) = radio.ptt_off() {
+                        log::warn!("PTT OFF failed: {e}");
+                    }
+                }
+            }
             return;
         }
 
@@ -266,6 +275,16 @@ fn run_tx_thread(
             // Give a small buffer for the audio device to actually play the final samples
             thread::sleep(Duration::from_millis(100));
             let _ = audio_output.stop();
+
+            // PTT OFF — deactivate before emitting complete
+            if let Ok(mut guard) = radio_state.radio.lock() {
+                if let Some(radio) = guard.as_mut() {
+                    if let Err(e) = radio.ptt_off() {
+                        log::warn!("PTT OFF failed: {e}");
+                    }
+                }
+            }
+
             let _ = app.emit(
                 "tx-status",
                 TxStatusPayload {
@@ -274,8 +293,6 @@ fn run_tx_thread(
                 },
             );
 
-            // PTT OFF is handled by the frontend: onComplete calls stop_tx(),
-            // which joins this thread (already finished) and calls ptt_off().
             return;
         }
 

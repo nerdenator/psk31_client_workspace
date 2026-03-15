@@ -19,6 +19,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::cpal_audio::CpalAudioOutput;
+use crate::commands::radio::with_radio;
 use crate::modem::encoder::Psk31Encoder;
 use crate::ports::{AudioOutput, RadioControl};
 use crate::state::AppState;
@@ -111,22 +112,15 @@ pub fn start_tx(
     let abort = state.tx_abort.clone();
     abort.store(false, Ordering::SeqCst);
 
-    // Verify DATA mode matches the radio's current frequency (non-fatal)
-    if let Ok(mut radio_guard) = state.radio.lock() {
-        if let Some(radio) = radio_guard.as_mut() {
-            ensure_data_mode(radio.as_mut());
+    // Verify DATA mode and set TX power (both non-fatal; auto-disconnects on serial error)
+    let target_watts = state.config.lock().unwrap().tx_power_watts;
+    let _ = with_radio(&state, &app, |radio| {
+        ensure_data_mode(radio.as_mut());
+        if let Err(e) = radio.set_tx_power(target_watts) {
+            log::warn!("TX power set failed (continuing): {e}");
         }
-    }
-
-    // Set TX power before keying up (ignore errors if no radio connected)
-    if let Ok(mut radio_guard) = state.radio.lock() {
-        if let Some(radio) = radio_guard.as_mut() {
-            let target_watts = state.config.lock().unwrap().tx_power_watts;
-            if let Err(e) = radio.set_tx_power(target_watts) {
-                log::warn!("TX power set failed (continuing): {e}");
-            }
-        }
-    }
+        Ok(())
+    });
 
     // Shared playback position for progress tracking
     let play_pos = Arc::new(AtomicUsize::new(0));

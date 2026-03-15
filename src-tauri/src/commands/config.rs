@@ -68,12 +68,15 @@ pub fn list_configurations(app: AppHandle) -> Result<Vec<String>, String> {
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .map_err(|e| format!("Failed to read configs dir: {e}"))?
         .filter_map(|entry| {
-            let entry = entry.ok()?;
-            let path = entry.path();
-            if path.extension()?.to_str()? == "json" {
-                path.file_stem()?.to_str().map(String::from)
-            } else {
-                None
+            let path = entry.ok()?.path();
+            if path.extension()?.to_str()? != "json" {
+                return None;
+            }
+            let name = path.file_stem()?.to_string_lossy().into_owned();
+            // Skip any file whose name wouldn't survive sanitization
+            match sanitize_name(&name) {
+                Ok(sanitized) if sanitized == name => Some(name),
+                _ => None,
             }
         })
         .collect();

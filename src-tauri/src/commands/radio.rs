@@ -27,7 +27,7 @@ struct SerialDisconnectedPayload {
 /// 1. Nulls out `AppState.radio` (marks as disconnected)
 /// 2. Clears `AppState.serial_port_name`
 /// 3. Emits `serial-disconnected` so the frontend resets its CAT UI
-fn with_radio<T>(
+pub(crate) fn with_radio<T>(
     state: &State<AppState>,
     app: &AppHandle,
     f: impl FnOnce(&mut Box<dyn RadioControl>) -> Psk31Result<T>,

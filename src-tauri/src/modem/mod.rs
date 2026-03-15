@@ -5,6 +5,5 @@
 pub mod varicode;
 pub mod encoder;
 pub mod decoder;
-pub mod pipeline;
 
 pub use varicode::Varicode;

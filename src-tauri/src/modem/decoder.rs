@@ -123,6 +123,17 @@ impl Psk31Decoder {
         self.invert_bits = false;
     }
 
+    /// Update the carrier frequency only if the change exceeds 0.1 Hz.
+    ///
+    /// This is the correct call site for the audio thread — it internalises the
+    /// change-detection threshold so the commands layer does not need to shadow
+    /// the carrier frequency.
+    pub fn update_carrier_if_changed(&mut self, freq: f64) {
+        if (freq - self.carrier_freq).abs() > 0.1 {
+            self.set_carrier_freq(freq);
+        }
+    }
+
     /// Signal strength as a 0.0..=1.0 value derived from AGC gain.
     ///
     /// The AGC gain is inversely proportional to signal level: low gain = strong signal.
@@ -238,5 +249,27 @@ mod tests {
         assert_eq!(decoder.last_symbol, 0.0);
         assert_eq!(decoder.bits_without_char, 0);
         assert!(!decoder.invert_bits);
+    }
+
+    #[test]
+    fn update_carrier_if_changed_no_op_below_threshold() {
+        let mut decoder = Psk31Decoder::new(1500.0, 48000);
+        // Process a few samples to accumulate some state
+        for _ in 0..100 {
+            decoder.process(0.0);
+        }
+        let carrier_before = decoder.carrier_freq;
+        // Delta of 0.05 Hz — below the 0.1 Hz threshold
+        decoder.update_carrier_if_changed(1500.05);
+        // carrier_freq must not have changed
+        assert_eq!(decoder.carrier_freq, carrier_before);
+    }
+
+    #[test]
+    fn update_carrier_if_changed_resets_above_threshold() {
+        let mut decoder = Psk31Decoder::new(1500.0, 48000);
+        // Delta of 50 Hz — well above threshold
+        decoder.update_carrier_if_changed(1550.0);
+        assert_eq!(decoder.carrier_freq, 1550.0);
     }
 }

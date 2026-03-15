@@ -196,7 +196,6 @@ fn run_audio_thread(
     // RX decoder — created with configured sample rate and initial carrier freq
     let initial_carrier = *rx_carrier_freq.lock().unwrap();
     let mut decoder = Psk31Decoder::new(initial_carrier, sample_rate);
-    let mut current_carrier = initial_carrier;
 
     // Buffer decoded chars to emit in batches (reduces event overhead)
     let mut rx_text_buf = String::new();
@@ -224,11 +223,7 @@ fn run_audio_thread(
         // RX decoding: feed every new sample to the decoder when enabled
         if rx_running.load(Ordering::SeqCst) {
             // Check if carrier frequency changed (click-to-tune)
-            let target_carrier = *rx_carrier_freq.lock().unwrap();
-            if (target_carrier - current_carrier).abs() > 0.1 {
-                decoder.set_carrier_freq(target_carrier);
-                current_carrier = target_carrier;
-            }
+            decoder.update_carrier_if_changed(*rx_carrier_freq.lock().unwrap());
 
             for &sample in &new_samples {
                 if let Some(ch) = decoder.process(sample) {

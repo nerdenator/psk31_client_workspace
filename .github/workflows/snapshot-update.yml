@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update-snapshots:
@@ -50,15 +51,24 @@ jobs:
         env:
           CI: true
 
-      - name: Commit updated snapshots
+      - name: Commit and open PR if snapshots changed
         run: |
-          BRANCH="${{ steps.target.outputs.branch }}"
+          TARGET="${{ steps.target.outputs.branch }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add tests/e2e/**-snapshots/
           if git diff --cached --quiet; then
-            echo "No snapshot changes to commit."
+            echo "No snapshot changes — nothing to commit."
           else
+            PR_BRANCH="chore/snapshots-${{ github.run_id }}"
+            git checkout -b "$PR_BRANCH"
             git commit -m "chore: update Playwright snapshots for Linux WebKit"
-            git push origin "$BRANCH"
+            git push origin "$PR_BRANCH"
+            gh pr create \
+              --base "$TARGET" \
+              --head "$PR_BRANCH" \
+              --title "chore: update Playwright snapshots for Linux WebKit" \
+              --body "Automated snapshot regeneration triggered by workflow run ${{ github.run_id }}."
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

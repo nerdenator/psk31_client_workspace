@@ -80,7 +80,7 @@ jobs:
         run: npx playwright install webkit --with-deps
 
       - name: Run Playwright tests with coverage instrumentation
-        run: npx playwright test
+        run: npx playwright test --update-snapshots
         env:
           CI: true
           VITE_COVERAGE: "true"

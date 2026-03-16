@@ -218,4 +218,41 @@ mod tests {
         assert_eq!(costas.filtered_i, 0.0);
         assert_eq!(costas.filtered_q, 0.0);
     }
+
+    #[test]
+    fn test_set_frequency_updates_nco() {
+        let mut costas = CostasLoop::new(1000.0, 48000.0, 2.0);
+        costas.set_frequency(1500.0);
+        // After set_frequency, the NCO inside should track at 1500 Hz.
+        // We verify indirectly: process a 1500 Hz tone and confirm the loop
+        // produces non-zero output (it has signal to work with).
+        let mut any_nonzero = false;
+        for i in 0..1000 {
+            let sample = (2.0 * PI * 1500.0 * i as f64 / 48000.0).cos() as f32;
+            let out = costas.process(sample);
+            if out.abs() > 0.001 {
+                any_nonzero = true;
+                break;
+            }
+        }
+        assert!(any_nonzero, "set_frequency(1500) should allow loop to demodulate a 1500 Hz tone");
+    }
+
+    #[test]
+    fn test_reset_clears_integrator_and_filters() {
+        let mut costas = CostasLoop::new(1000.0, 48000.0, 2.0);
+
+        // Drive the integrator non-zero
+        for i in 0..5000 {
+            let sample = (2.0 * PI * 1001.0 * i as f64 / 48000.0).cos() as f32;
+            costas.process(sample);
+        }
+
+        // Integrator should be non-zero due to frequency offset
+        // (just verify reset zeroes it regardless)
+        costas.reset();
+        assert_eq!(costas.integrator, 0.0, "integrator should be 0 after reset");
+        assert_eq!(costas.filtered_i, 0.0, "filtered_i should be 0 after reset");
+        assert_eq!(costas.filtered_q, 0.0, "filtered_q should be 0 after reset");
+    }
 }

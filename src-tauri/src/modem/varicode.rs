@@ -268,4 +268,103 @@ mod tests {
 
         assert_eq!(decoded, "test");
     }
+
+    #[test]
+    fn test_bits_from_str_all_ones() {
+        let bits = Varicode::bits_from_str("111");
+        assert_eq!(bits, vec![true, true, true]);
+    }
+
+    #[test]
+    fn test_bits_from_str_all_zeros() {
+        let bits = Varicode::bits_from_str("000");
+        assert_eq!(bits, vec![false, false, false]);
+    }
+
+    #[test]
+    fn test_bits_from_str_mixed() {
+        let bits = Varicode::bits_from_str("101");
+        assert_eq!(bits, vec![true, false, true]);
+    }
+
+    #[test]
+    fn test_bits_from_str_empty() {
+        let bits = Varicode::bits_from_str("");
+        assert_eq!(bits, Vec::<bool>::new());
+    }
+
+    #[test]
+    fn test_encode_char_a_uppercase() {
+        assert_eq!(Varicode::encode('A'), Some("1111101"));
+    }
+
+    #[test]
+    fn test_encode_char_z_uppercase() {
+        assert_eq!(Varicode::encode('Z'), Some("1010101101"));
+    }
+
+    #[test]
+    fn test_encode_digit_zero() {
+        assert_eq!(Varicode::encode('0'), Some("10110111"));
+    }
+
+    #[test]
+    fn test_encode_digit_nine() {
+        assert_eq!(Varicode::encode('9'), Some("110110111"));
+    }
+
+    #[test]
+    fn test_encode_nul_char() {
+        assert_eq!(Varicode::encode('\0'), Some("1010101011"));
+    }
+
+    #[test]
+    fn test_encode_space() {
+        assert_eq!(Varicode::encode(' '), Some("1"));
+    }
+
+    #[test]
+    fn test_encode_unsupported_char_returns_none() {
+        // Characters above 0x7F are not in the Varicode table
+        assert_eq!(Varicode::encode('é'), None);
+    }
+
+    #[test]
+    fn test_decoder_reset_clears_state() {
+        let mut decoder = VaricodeDecoder::new();
+
+        // Push some bits to build partial state
+        decoder.push_bit(true);
+        decoder.push_bit(true);
+        decoder.push_bit(false);
+
+        decoder.reset();
+
+        // After reset, pushing "00" should not decode anything (buffer is empty)
+        let r1 = decoder.push_bit(false);
+        let r2 = decoder.push_bit(false);
+        assert!(r1.is_none(), "Should not decode after reset+00 with no data");
+        assert!(r2.is_none(), "Should not decode after reset+00 with no data");
+    }
+
+    #[test]
+    fn test_decoder_reset_and_reuse() {
+        let mut decoder = VaricodeDecoder::new();
+
+        // Decode 'e' ("11" + "00")
+        decoder.push_bit(true);
+        decoder.push_bit(true);
+        decoder.push_bit(false);
+        let ch = decoder.push_bit(false);
+        assert_eq!(ch, Some('e'));
+
+        // Reset and decode 't' ("101" + "00")
+        decoder.reset();
+        decoder.push_bit(true);
+        decoder.push_bit(false);
+        decoder.push_bit(true);
+        decoder.push_bit(false);
+        let ch2 = decoder.push_bit(false);
+        assert_eq!(ch2, Some('t'));
+    }
 }

@@ -587,6 +587,74 @@ mod tests {
         assert!(decode(&format!("XX{body};"), &GetStatus).is_err());
     }
 
+    // --- BandSelect ---
+
+    #[test]
+    fn decode_band_select_ack() {
+        // BandSelect is write-only; the radio replies with just ";"
+        assert_eq!(decode(";", &BandSelect(5)).unwrap(), CatResponse::Ack);
+    }
+
+    #[test]
+    fn decode_band_select_nak() {
+        assert!(decode("?", &BandSelect(5)).is_err());
+    }
+
+    // --- expect_ack edge cases ---
+
+    #[test]
+    fn decode_set_frequency_unexpected_response_is_err() {
+        // A non-";" response to a write command should be an error
+        assert!(decode("FA014070000;", &SetFrequencyA(14_070_000)).is_err());
+    }
+
+    #[test]
+    fn decode_ack_empty_string() {
+        // Empty string is a valid Ack (some firmware omits the ";")
+        assert_eq!(decode("", &PttOn).unwrap(), CatResponse::Ack);
+    }
+
+    // --- GetStatus body too short (< 25 chars) ---
+
+    #[test]
+    fn decode_if_body_too_short_returns_err() {
+        // "IF" + 10 char body — body is only 10 chars, less than 25 minimum
+        assert!(decode("IF0000000000;", &GetStatus).is_err());
+    }
+
+    #[test]
+    fn decode_if_body_exactly_24_chars_is_err() {
+        // 24-char body: one short of the 25-char compact minimum
+        let body: String = std::iter::repeat('0').take(24).collect();
+        let response = format!("IF{body};");
+        assert!(decode(&response, &GetStatus).is_err());
+    }
+
+    // --- parse_rit_offset edge cases (tested indirectly via full decode) ---
+
+    #[test]
+    fn decode_if_rit_negative_via_full_format() {
+        // Verify negative RIT offset in 37-char full IF response
+        let response = make_if_response(14_070_000, "DATA-USB", false, true, -500, false);
+        let s = match decode(&response, &GetStatus).unwrap() {
+            CatResponse::Status(s) => s,
+            _ => panic!("expected Status"),
+        };
+        assert_eq!(s.rit_offset_hz, -500);
+        assert!(s.rit_enabled);
+    }
+
+    #[test]
+    fn decode_if_rit_zero_no_sign() {
+        // RIT offset "00000" (no sign prefix) should parse as 0
+        let response = make_if_response(14_070_000, "DATA-USB", false, false, 0, false);
+        let s = match decode(&response, &GetStatus).unwrap() {
+            CatResponse::Status(s) => s,
+            _ => panic!("expected Status"),
+        };
+        assert_eq!(s.rit_offset_hz, 0);
+    }
+
     // --- Mode roundtrip ---
 
     #[test]

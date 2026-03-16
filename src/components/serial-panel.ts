@@ -15,15 +15,18 @@ type BandEntry = {
 };
 
 const BAND_PLAN: readonly BandEntry[] = [
-  { name: '160m', minHz: 1_800_000,  maxHz: 2_000_000,  psk31Hz: 1_838_000  },
-  { name: '80m',  minHz: 3_500_000,  maxHz: 4_000_000,  psk31Hz: 3_580_000  },
-  { name: '40m',  minHz: 7_000_000,  maxHz: 7_300_000,  psk31Hz: 7_035_000  },
-  { name: '30m',  minHz: 10_100_000, maxHz: 10_150_000, psk31Hz: 10_142_000 },
-  { name: '20m',  minHz: 14_000_000, maxHz: 14_350_000, psk31Hz: 14_070_000 },
-  { name: '17m',  minHz: 18_068_000, maxHz: 18_168_000, psk31Hz: 18_100_000 },
-  { name: '15m',  minHz: 21_000_000, maxHz: 21_450_000, psk31Hz: 21_080_000 },
-  { name: '12m',  minHz: 24_890_000, maxHz: 24_990_000, psk31Hz: 24_920_000 },
-  { name: '10m',  minHz: 28_000_000, maxHz: 29_700_000, psk31Hz: 28_120_000 },
+  { name: '160m', minHz: 1_800_000,   maxHz: 2_000_000,   psk31Hz: 1_838_000   },
+  { name: '80m',  minHz: 3_500_000,   maxHz: 4_000_000,   psk31Hz: 3_580_000   },
+  { name: '40m',  minHz: 7_000_000,   maxHz: 7_300_000,   psk31Hz: 7_035_000   },
+  { name: '30m',  minHz: 10_100_000,  maxHz: 10_150_000,  psk31Hz: 10_142_000  },
+  { name: '20m',  minHz: 14_000_000,  maxHz: 14_350_000,  psk31Hz: 14_070_000  },
+  { name: '17m',  minHz: 18_068_000,  maxHz: 18_168_000,  psk31Hz: 18_100_000  },
+  { name: '15m',  minHz: 21_000_000,  maxHz: 21_450_000,  psk31Hz: 21_080_000  },
+  { name: '12m',  minHz: 24_890_000,  maxHz: 24_990_000,  psk31Hz: 24_920_000  },
+  { name: '10m',  minHz: 28_000_000,  maxHz: 29_700_000,  psk31Hz: 28_120_000  },
+  { name: '6m',   minHz: 50_000_000,  maxHz: 54_000_000,  psk31Hz: 50_290_000  },
+  { name: '2m',   minHz: 144_000_000, maxHz: 148_000_000, psk31Hz: 144_144_000 },
+  { name: '70cm', minHz: 420_000_000, maxHz: 450_000_000, psk31Hz: 432_100_000 },
 ];
 
 /** Return the correct DATA mode for a frequency.
